@@ -11,7 +11,6 @@
  */
 
 #define	RESCHED 1	/* check for interpreter reschedule */
-#define	SOFTFP	1
 
 enum
 {
@@ -118,8 +117,6 @@ enum
 	Blo	= 0,	/* offset of low order word in big */
 	Bhi	= 4,	/* offset of high order word in big */
 
-	Lg2Rune	= 2,
-
 	NCON	= (0xFFC-8)/4,
 
 	SRCOP	= (1<<0),
@@ -220,19 +217,16 @@ enum
 #define PATCH(ptr)			*ptr |= (((ulong)code-(ulong)(ptr)-8)>>2) & 0x00ffffff
 
 #define MOV(src, dst)			DP(AL, Mov, 0, dst, 0, src)
-
-#define FITS12(v)	((ulong)(v)<BITS(12))
 #define FITS8(v)	((ulong)(v)<BITS(8))
 #define FITS5(v)	((ulong)(v)<BITS(5))
 
 /* assumes H==-1 */
 #define CMPH(C, r)		CMNI(C, r, 0, 0, 1)
-#define NOTNIL(r)	(CMPH(AL, (r)), CCALL(EQ, nullity))
+#define NOTNIL(r)	(CMPH(AL, (r)), CCALL(EQ, bounds))
 
 /* array bounds checking */
 #define BCK(r, rb)	(CMP(AL, rb, 0, 0, r), CCALL(LS, bounds))
 #define BCKI(i, rb)	(CMPI(AL, rb, 0, 0, i), CCALL(LS, bounds))
-#define BCKR(i, rb)	(CMPI(AL, rb, 0, 0, 0)|(i), CCALL(LS, bounds))
 
 static	ulong*	code;
 static	ulong*	base;
@@ -473,8 +467,7 @@ memc(int c, int inst, ulong disp, int rm, int r)
 
 	if(inst == Lea) {
 		if(disp < BITS(8)) {
-			if(disp != 0 || rm != r)
-				DPI(c, Add, rm, r, 0, disp);
+			DPI(c, Add, rm, r, 0, disp);
 			return;
 		}
 		if(-disp < BITS(8)) {
@@ -695,13 +688,6 @@ bounds(void)
 }
 
 static void
-nullity(void)
-{
-	/* mem(Stw, O(REG,FP), RREG, RFP); */
-	error(exNilref);
-}
-
-static void
 punt(Inst *i, int m, void (*fn)(void))
 {
 	ulong pc;
@@ -917,7 +903,7 @@ cbraf(Inst *i, int r)
 {
 	if(RESCHED)
 		schedcheck(i);
-	if(!SOFTFP){
+	if(0){
 		ulong *s=code;
 		opflld(i, Ldf, FA4);
 		midfl(i, Ldf, FA2);
@@ -1271,7 +1257,7 @@ comp(Inst *i)
 		comgoto(i);
 		break;
 	case IMOVF:
-		if(!SOFTFP){
+		if(0){
 			opflld(i, Ldf, FA2);
 			opflst(i, Stf, FA2);
 			break;
@@ -1289,8 +1275,7 @@ comp(Inst *i)
 	case IHEADM:
 		opwld(i, Ldw, RA1);
 		NOTNIL(RA1);
-		if(OA(List,data) != 0)
-			DPI(AL, Add, RA1, RA1, 0, OA(List,data));
+		DPI(AL, Add, RA1, RA1, 0, OA(List,data));
 		movmem(i);
 		break;
 /*
@@ -1563,31 +1548,28 @@ comp(Inst *i)
 		opwld(i, Ldw, RA1);			// RA1 = string
 		NOTNIL(RA1);
 		imm = 1;
-		if((i->add&ARM) != AXIMM || !FITS12((short)i->reg<<Lg2Rune) || immrot((short)i->reg) == 0){
+		if((i->add&ARM) != AXIMM || !FITS8((short)i->reg<<1)){
 			mid(i, Ldw, RA2);			// RA2 = i
 			imm = 0;
 		}
 		mem(Ldw, O(String,len),RA1, RA0);	// len<0 => index Runes, otherwise bytes
-		if(bflag){
-			DPI(AL, Orr, RA0, RA3, 0, 0);
-			DPI(LT, Rsb, RA3, RA3, 0, 0);
-			if(imm)
-				BCKR(immrot((short)i->reg), RA3);
-			else
-				BCK(RA2, RA3);
-		}
 		DPI(AL, Add, RA1, RA1, 0, O(String,data));
 		CMPI(AL, RA0, 0, 0, 0);
+		if(bflag)
+			DPI(LT, Rsb, RA0, RA0, 0, 0);
 		if(imm){
 			LDB(GE, RA1, RA3, i->reg);
-			LDW(LT, RA1, RA3, (short)i->reg<<Lg2Rune);
+			LDH(LT, RA1, RA3, (short)i->reg<<1);
+			if(bflag)
+				BCKI(i->reg, RA0);
 		} else {
 			LDRB(GE, RA1, RA3, 0, RA2);
-			DP(LT, Mov, 0, RA2, (Lg2Rune<<3), RA2);
-			LDRW(LT, RA1, RA3, 0, RA2);
+			DP(LT, Mov, 0, RA2, (1<<3), RA2);
+			LDRH(LT, RA1, RA3, RA2);
+			if(bflag)
+				BCK(RA2, RA0);
 		}
 		opwst(i, Stw, RA3);
-//if(pass){print("%D\n", i); das(s, code-s);}
 		break;
 	case IINDL:
 	case IINDF:
@@ -1595,9 +1577,9 @@ comp(Inst *i)
 	case IINDB:
 		opwld(i, Ldw, RA0);			/* a */
 		NOTNIL(RA0);
+		mem(Ldw, O(Array, data), RA0, RA0);
 		if(bflag)
 			mem(Ldw, O(Array, len), RA0, RA2);
-		mem(Ldw, O(Array, data), RA0, RA0);
 		r = 0;
 		switch(i->op) {
 		case IINDL:
@@ -1608,11 +1590,10 @@ comp(Inst *i)
 			r = 2;
 			break;
 		}
-		if(UXDST(i->add) == DST(AIMM) && (imm = immrot(i->d.imm)) != 0) {
+		if(UXDST(i->add) == DST(AIMM) && FITS8(i->d.imm<<r)) {
 			if(bflag)
-				BCKR(imm, RA2);
-			if(i->d.imm != 0)
-				DPI(AL, Add, RA0, RA0, 0, 0) | immrot(i->d.imm<<r);
+				BCKI(i->d.imm, RA2);
+			DPI(AL, Add, RA0, RA0, 0, (i->d.imm<<r));
 		} else {
 			opwst(i, Ldw, RA1);
 			if(bflag)
@@ -1620,7 +1601,6 @@ comp(Inst *i)
 			DP(AL, Add, RA0, RA0, r<<3, RA1);
 		}
 		mid(i, Stw, RA0);
-//if(pass){print("%D\n", i); das(s, code-s);}
 		break;
 	case IINDX:
 		opwld(i, Ldw, RA0);			/* a */
@@ -1637,7 +1617,6 @@ comp(Inst *i)
 		MUL(AL, RA2, RA1, RA1);
 		DP(AL, Add, RA1, RA0, 0, RA0);
 		mid(i, Stw, RA0);
-//if(pass){print("%D\n", i); das(s, code-s);}
 		break;
 	case IADDL:
 		larith(i, Add, Adc);
@@ -1700,9 +1679,8 @@ comp(Inst *i)
 	case IADDF:
 		r = Adf;
 	arithf:
-		if(SOFTFP){
+		if(1){
 			/* software fp */
-			USED(r);
 			punt(i, SRCOP|DSTOP|THREOP, optab[i->op]);
 			break;
 		}
@@ -1712,7 +1690,7 @@ comp(Inst *i)
 		opflst(i, Stf, FA4);
 		break;
 	case INEGF:
-		if(SOFTFP){
+		if(1){
 			punt(i, SRCOP|DSTOP, optab[i->op]);
 			break;
 		}
@@ -1722,7 +1700,7 @@ comp(Inst *i)
 //if(pass){print("%D\n", i); das(s, code-s);}
 		break;
 	case ICVTWF:
-		if(SOFTFP){
+		if(1){
 			punt(i, SRCOP|DSTOP, optab[i->op]);
 			break;
 		}
@@ -1732,7 +1710,7 @@ comp(Inst *i)
 //if(pass){print("%D\n", i); das(s, code-s);}
 		break;
 	case ICVTFW:
-		if(SOFTFP){
+		if(1){
 			punt(i, SRCOP|DSTOP, optab[i->op]);
 			break;
 		}

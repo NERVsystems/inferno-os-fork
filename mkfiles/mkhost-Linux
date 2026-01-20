@@ -7,6 +7,6 @@ HOSTMODEL=	Posix
 OSTARG=		os
 
 DATA2S=		data2s
-NDATE=		ndate
+NDATE=		date +%s
 KSIZE=		ksize
 AWK=		awk

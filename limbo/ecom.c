@@ -1374,18 +1374,18 @@ ecom(Src *src, Node *nto, Node *n)
 		if(nto->addable >= Ralways)
 			nto = ecom(src, talloc(&tto, nto->ty, nil), nto);
 		op = IINDX;
-		switch(left->ty->tof->size){
-		case IBY2LG:
+		/*
+		 * On 64-bit systems, IBY2WD == IBY2LG == 8.
+		 * Use if-else to avoid duplicate case values.
+		 */
+		if(left->ty->tof->size == IBY2LG) {
 			op = IINDL;
 			if(left->ty->tof == treal)
 				op = IINDF;
-			break;
-		case IBY2WD:
+		} else if(left->ty->tof->size == IBY2WD) {
 			op = IINDW;
-			break;
-		case 1:
+		} else if(left->ty->tof->size == 1) {
 			op = IINDB;
-			break;
 		}
 		genrawop(src, op, left, nto, right);
 		// array[] of {....} [index] frees array too early (before index value used)

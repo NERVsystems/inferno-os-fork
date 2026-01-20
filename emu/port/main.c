@@ -13,13 +13,13 @@ extern	char*	hosttype;
 char*	tkfont;	/* for libtk/utils.c */
 int	tkstylus;	/* libinterp/tk.c */
 extern	int	mflag;
-	int	dflag;
+	int	dflag = 0;
 	int vflag;
+	int	vflag;
 	Procs	procs;
 	char	*eve;
-	int	Xsize	= 640;
-	int	Ysize	= 480;
-	int	bflag = 1;
+	int	Xsize	= 1600;
+	int	Ysize	= 1024;
 	int	sflag;
 	int	qflag;
 	int	xtblbit;
@@ -137,8 +137,8 @@ option(int argc, char *argv[], void (*badusage)(void))
 		if(cflag < 0|| cflag > 9)
 			usage();
 		break;
-	case 'I':	/* (temporary option) run without cons */
-		dflag++;
+	case 'I':	/* run with cons */
+		dflag = 1;
 		break;
 	case 'd':		/* run as a daemon */
 		dflag++;
@@ -181,7 +181,7 @@ option(int argc, char *argv[], void (*badusage)(void))
 		tkstylus = 1;
 		break;
 	case 'v':
-		vflag++;	/* print startup messages */
+		vflag = 1;	/* print startup messages */
 		break;
 	} ARGEND
 }
@@ -227,19 +227,12 @@ putenvqv(char *name, char **v, int n, int conf)
 }
 
 void
-nofence(void)
-{
-}
-
-void
 main(int argc, char *argv[])
 {
 	char *opt, *p;
 	char *enva[20];
 	int envc;
 
-	if(coherence == nil)
-		coherence = nofence;
 	quotefmtinstall();
 	savestartup(argc, argv);
 	/* set default root now, so either $EMU or -r can override it later */
@@ -347,7 +340,9 @@ errorf(char *fmt, ...)
 void
 error(char *err)
 {
-	if(err != up->env->errstr && up->env->errstr != nil)
+	if(err == nil)
+		err = "unknown error";
+	if(up != nil && up->env != nil && up->env->errstr != nil && err != up->env->errstr)
 		kstrcpy(up->env->errstr, err, ERRMAX);
 //	ossetjmp(up->estack[NERR-1]);
 	nexterror();

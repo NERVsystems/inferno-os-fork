@@ -5,14 +5,14 @@ nuke:V: nuke-$SHELLTYPE
 clean:V: clean-$SHELLTYPE
 
 %-rc %-nt:QV:
-	for (j in $DIRS)
-	{
-		{
-			test -d $j && {
-				echo '@{builtin cd' $j '; mk $MKFLAGS $stem}'
-				@{builtin cd $j; mk $MKFLAGS $stem}
-			}
-		} || test ! -e $j
+	load std
+	for j in $DIRS {
+		if { ftest -d $j } {
+			echo 'cd' $j '; mk' $MKFLAGS $stem
+			cd $j; mk $MKFLAGS $stem; cd ..
+		}  {
+			! { ftest -e $j }
+		}
 	}
 
 %-sh:QV:

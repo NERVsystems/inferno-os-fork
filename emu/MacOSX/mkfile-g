@@ -1,24 +1,25 @@
-SYSTARG=MacOSX
+_SYSTARG=$SYSTARG
+_OBJTYPE=$OBJTYPE
 <../../mkconfig
-SYSTARG=MacOSX
+SYSTARG=$_SYSTARG
+OBJTYPE=$_OBJTYPE
 
 #Configurable parameters
 
-CONF=emu-g			#default configuration
+CONF=emu			#default configuration
 CONFLIST=emu
 CLEANCONFLIST=
 
-INSTALLDIR=$ROOT/$SYSTARG/$OBJTYPE/bin	#path of directory where kernel is installed
+INSTALLDIR=/sys/$SYSTARG/$OBJTYPE/bin	#path of directory where kernel is installed
 
 #end configurable parameters
 
-<$ROOT/mkfiles/mkfile-$SYSTARG-$OBJTYPE	#set vars based on target system
-
-<| $SHELLNAME ../port/mkdevlist $CONF	#sets $IP, $DEVS, $PORT, $LIBS
+<| sh ../port/mkdevlist < $CONF	#sets $IP, $DEVS, $PORT, $LIBS
 
 OBJ=\
 	asm-$OBJTYPE.$O\
 	os.$O\
+	stubs-headless.$O\
 	$CONF.root.$O\
 	lock.$O\
 	$DEVS\
@@ -26,30 +27,36 @@ OBJ=\
 
 HFILES=\
 
-CFLAGS='-DROOT="'$ROOT'"'\
-	'-DOBJTYPE="'$OBJTYPE'"'\
+CFLAGS=\
+	'''-DROOT="'.'"'''\
 	-DEMU -I. -I../port\
-	-I$ROOT/$SYSTARG/$OBJTYPE/include\
-	-I$ROOT/include -I$ROOT/libinterp\
+	-I../../$SYSTARG/$OBJTYPE/include\
+	-I../../include\
+	-I../../libinterp\
 	$CTHREADFLAGS $CFLAGS $EMUOPTIONS\
 
-KERNDATE=`{$NDATE}
+KERNDATE=0
 
 SYSLIBS= \
 	-lm\
 	-lpthread\
 	-framework CoreFoundation\
 	-framework IOKit\
+#	-framework CoreFoundation\
+#	-framework IOKit\
+#	-framework ApplicationServices\
 
 default:V:	$O.$CONF
 
-<../port/portmkfile
 
-$O.$CONF:	$OBJ $CONF.c $CONF.root.h $LIBFILES
-	$CC $CFLAGS '-DKERNDATE='$KERNDATE $CONF.c
+$O.$CONF:	$OBJ $CONF.c $CONF.root.h $LIBNAMES
+	$CC $CFLAGS -DKERNDATE=$KERNDATE $CONF.c
 	$LD $LDFLAGS -o $target $OBJ $CONF.$O $LIBFILES $SYSLIBS
 
 install:V: $O.$CONF
 	cp $O.$CONF $INSTALLDIR/$CONF
 
+<../port/portmkfile
+
+ipif.c:N:	../FreeBSD/ipif.c
 devfs.c:N:	../port/devfs-posix.c

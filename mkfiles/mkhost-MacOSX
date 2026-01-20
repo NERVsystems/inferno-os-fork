@@ -1,7 +1,5 @@
-#
-#   Supports all Darwin based systems (Darwin, Mac OS X, Mac OS X Server)
-#	Variables for host system type = Darwin
-#
+
+#	Variables for host system type = MacOSX
 
 SHELLTYPE=	sh
 SHELLNAME=	/bin/sh
@@ -12,13 +10,3 @@ DATA2S=		data2s
 NDATE=		ndate
 KSIZE=		ksize
 AWK=		awk
-CP=	cp
-ECHO=	echo
-FALSE=	false
-MKDIR=	mkdir -p
-RM=	rm -f
-RMDIR=	rmdir
-TRUE=	true
-
-JAVAC=  /usr/bin/javac 
-MACOSINF=caseinsensitive	# nobble .S rules

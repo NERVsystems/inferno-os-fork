@@ -594,7 +594,7 @@ ipread(Chan *ch, void *a, long n, vlong off)
 				error(Ebadarg);
 			p = a;
 			r = so_recv(c->sfd, p + c->headers, n - c->headers, p, c->headers);
-			if(r >= 0)
+			if(r > 0)
 				r += c->headers;
 		} else
 			r = so_recv(c->sfd, a, n, nil, 0);
@@ -610,6 +610,9 @@ ipread(Chan *ch, void *a, long n, vlong off)
 static void
 setladdr(Conv *c)
 {
+	/* Null check added for security (cppcheck warning) */
+	if(c == nil)
+		return;
 	/* TO DO: this can't be right for hosts with several addresses before connect/accept */
 	so_getsockname(c->sfd, c->laddr, &c->lport);
 }

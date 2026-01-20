@@ -14,9 +14,10 @@ dev
 	cmd	cmd
 	indir
 
-	draw	win
+	draw
 	pointer
 	snarf
+	wmsz
 
 	ip	ipif-posix ipaux
 	eia
@@ -25,8 +26,8 @@ dev
 
 lib
 	interp
-	tk
-	freetype
+#	tk
+#	freetype
 	math
 	draw
 
@@ -44,14 +45,12 @@ mod
 	sys
 	draw
 
-	tk
+#	tk
 	math
 	srv	srv
 	keyring
-	crypt
-	ipints
-	loader
-	freetype
+#	loader
+#	freetype
 
 port
 	alloc
@@ -59,7 +58,6 @@ port
 	chan
 	dev
 	devtab
-
 	dial
 	dis
 	discall
@@ -81,7 +79,7 @@ port
 	uqid
 
 code
-	int	dontcompile = 1;
+	int	dontcompile = 0;
 	int macjit = 1;
 
 init
@@ -91,7 +89,6 @@ root
 	/dev	/
 	/fd	/
 	/prog	/
-	/prof	/
 	/net	/
 	/net.alt	/
 	/chan	/

@@ -14,7 +14,7 @@ dev
 	cmd	cmd
 	indir
 
-	ip	ipif-posix ipaux
+	ip	ipif ipaux
 	eia
 #	audio	audio
 	mem
@@ -35,8 +35,6 @@ mod
 	math
 	srv	srv
 	keyring
-	crypt
-	ipints
 	loader
 
 port
@@ -44,8 +42,6 @@ port
 	cache
 	chan
 	dev
-	devtab
-
 	dial
 	dis
 	discall
@@ -79,7 +75,6 @@ root
 	/dev	/
 	/fd	/
 	/prog	/
-	/prof	/
 	/net	/
 	/net.alt	/
 	/chan	/

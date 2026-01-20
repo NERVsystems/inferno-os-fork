@@ -9,7 +9,7 @@
 
 #include	<sys/types.h>
 #include	<sys/stat.h>
-#include	<fcntl.h>
+#include	<sys/fcntl.h>
 #include	<sys/socket.h>
 #include	<sys/un.h>
 #include	<utime.h>
@@ -655,7 +655,7 @@ fsqid(struct stat *st)
 
 	dev = (u16int)st->st_dev;
 	if(dev & 0x8000){
-		static int aware = 1;
+		static int aware;
 		if(aware==0){
 			aware = 1;
 			fprint(2, "fs: fsqid: top-bit dev: %#4.4ux\n", dev);

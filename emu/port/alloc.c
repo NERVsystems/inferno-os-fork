@@ -2,6 +2,7 @@
 #include "fns.h"
 #include "interp.h"
 #include "error.h"
+#include "sys/mman.h"
 
 enum
 {
@@ -48,9 +49,10 @@ struct
 } table = {
 	3,
 	{
-		{ "main",  0, 	32*1024*1024, 31,  512*1024, 0, 31*1024*1024 },
-		{ "heap",  1, 	32*1024*1024, 31,  512*1024, 0, 31*1024*1024 },
-		{ "image", 2,   64*1024*1024+256, 31, 4*1024*1024, 1, 63*1024*1024 },
+		/* quanta must be 127 for 64-bit (5 pointers + allocpc/reallocpc = 64 bytes min) */
+		{ "main",  0, 	32*1024*1024, 127,  512*1024, 0, 31*1024*1024 },
+		{ "heap",  1, 	32*1024*1024, 127,  512*1024, 0, 31*1024*1024 },
+		{ "image", 2,   64*1024*1024+256, 127, 4*1024*1024, 1, 63*1024*1024 },
 	}
 };
 
@@ -373,7 +375,13 @@ dopoolalloc(Pool *p, ulong asize, ulong pc)
 	}
 
 	p->nbrk++;
-	t = (Bhdr *)sbrk(alloc);
+	/* t = (Bhdr *)sbrk(alloc); doesn't work on Alpine Linux */
+#ifdef __APPLE__
+	/* macOS ARM64 hardened runtime doesn't allow PROT_EXEC without entitlements */
+	t = (Bhdr *) mmap(0, alloc, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
+#else
+	t = (Bhdr *) mmap(0, alloc, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+#endif
 	if(t == (void*)-1) {
 		p->nbrk--;
 		unlock(&p->l);

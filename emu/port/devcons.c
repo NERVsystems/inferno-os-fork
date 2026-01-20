@@ -110,6 +110,11 @@ kbdslave(void *a)
 			case 0x15:
 				write(1, "^U\n", 3);
 				break;
+			case '\b':
+			case 0x7f:
+				/* Erase character on terminal: backspace, space, backspace */
+				write(1, "\b \b", 3);
+				break;
 			default:
 				write(1, &b, 1);
 				break;
@@ -282,7 +287,7 @@ static long
 consread(Chan *c, void *va, long n, vlong offset)
 {
 	int send;
-	char buf[64], ch;
+	char *p, buf[64], ch;
 
 	if(c->qid.type & QTDIR)
 		return devdirread(c, va, n, contab, nelem(contab), devgen);
@@ -411,6 +416,8 @@ conswrite(Chan *c, void *va, long n, vlong offset)
 {
 	char buf[128], *a, ch;
 	int x;
+	int ret;
+
 
 	if(c->qid.type & QTDIR)
 		error(Eperm);
@@ -433,7 +440,8 @@ conswrite(Chan *c, void *va, long n, vlong offset)
 			}
 			runlock(&kprintq.l);
 		}
-		return write(1, va, n);
+		ret = write(1, va, n);
+		return ret;
 
 	case Qsysctl:
 		return sysconwrite(va, n);

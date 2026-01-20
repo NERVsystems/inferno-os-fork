@@ -17,19 +17,13 @@ EMUDIRS=\
 	libinterp\
 	libkeyring\
 	libdraw\
-	libprefab\
-	libtk\
-	libfreetype\
 	libmemdraw\
 	libmemlayer\
-	libdynld\
 	utils/data2c\
 	utils/ndate\
 	emu\
 
 KERNEL_DIRS=\
-	os\
-	os/boot/pc\
 
 # mkconfig is included at this point to allow it to override
 #the preceding declarations (particularly KERNEL_DIRS) if need be
@@ -38,7 +32,7 @@ KERNEL_DIRS=\
 
 DIRS=\
 	$EMUDIRS\
-#	appl\
+	appl\
 
 foo:QV:
 	echo mk all, clean, install, installall or nuke
@@ -51,12 +45,6 @@ emu:V:	emu/all-$HOSTMODEL
 emuinstall:V:	emu/install-$HOSTMODEL
 emuclean:V:	emu/clean-$HOSTMODEL
 emunuke:V:	emu/nuke-$HOSTMODEL
-kernel:V:	kernel/all-$HOSTMODEL
-kernelall:V:	kernel/all-$HOSTMODEL
-kernelclean:V:	kernel/clean-$HOSTMODEL
-kernelinstall:V:	kernel/install-$HOSTMODEL
-kernelinstallall:V:	kernel/installall-$HOSTMODEL
-kernelnuke:V:	kernel/nuke-$HOSTMODEL
 nuke:V:		nuke-$HOSTMODEL
 
 cleandist:V: clean
@@ -67,14 +55,14 @@ nukedist:V: nuke
 	rm -f $ROOT/$OBJDIR/lib/lib*.a
 	
 &-Posix:QV:
-	for j in $DIRS utils tools
+	for j in $DIRS utils 
 	do
 		echo "(cd $j; mk $MKFLAGS $stem)"
 		(cd $j; mk $MKFLAGS $stem) || exit 1
 	done
 
 &-Nt:QV:
-	for (j in $DIRS utils tools)
+	for (j in $DIRS utils )
 	{
 		echo '@{builtin cd' $j '; mk $MKFLAGS $stem}'
 		@{builtin cd $j; mk.exe $MKFLAGS $stem }
@@ -110,34 +98,6 @@ emu/&-Nt:QV:
 
 emu/&-Plan9:QV:
 	for (j in $EMUDIRS)
-	{
-		echo '@{builtin cd' $j '; mk $MKFLAGS $stem}'
-		@{builtin cd $j; mk $MKFLAGS $stem }
-	}
-
-kernel/&-Posix:QV:
-	for j in $KERNEL_DIRS
-	do
-		echo "(cd $j; mk $MKFLAGS $stem)"
-		(cd $j; mk $MKFLAGS $stem) || exit 1
-	done
-
-kernel/&-Nt:QV:
-	for (j in $KERNEL_DIRS)
-	{
-		echo '@{builtin cd' $j '; mk $MKFLAGS $stem}'
-		@{builtin cd $j; mk $MKFLAGS $stem }
-	}
-
-kernel/&-Inferno:QV:
-	for (j in $KERNEL_DIRS)
-	{
-		echo '@{builtin cd' $j '; mk $MKFLAGS $stem}'
-		@{builtin cd $j; mk $MKFLAGS $stem }
-	}
-
-kernel/&-Plan9:QV:
-	for (j in $KERNEL_DIRS)
 	{
 		echo '@{builtin cd' $j '; mk $MKFLAGS $stem}'
 		@{builtin cd $j; mk $MKFLAGS $stem }

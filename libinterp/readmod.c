@@ -2,13 +2,12 @@
 #include "isa.h"
 #include "interp.h"
 #include "kernel.h"
-#include "dynld.h"
 
 Module*
 readmod(char *path, Module *m, int sync)
 {
 	Dir *d;
-	int fd, n, dynld;
+	int fd, n;
 	uchar *code;
 	Module *ans;
 	ulong length;
@@ -22,7 +21,6 @@ readmod(char *path, Module *m, int sync)
 	ans = nil;
 	code = nil;
 	length = 0;
-	dynld = 0;
 
 	if(sync)
 		release();
@@ -48,10 +46,6 @@ readmod(char *path, Module *m, int sync)
 		kwerrstr("implausible length");
 		goto done;
 	}
-	if((d->mode&0111) && dynldable(fd)){
-		dynld = 1;
-		goto done1;
-	}
 	length = d->length;
 	code = mallocz(length, 0);
 	if(code == nil)
@@ -73,11 +67,6 @@ done1:
 	if(code != nil) {
 		ans = parsemod(path, code, length, d);
 		free(code);
-	}
-	else if(dynld){
-		kseek(fd, 0, 0);
-		ans = newdyncode(fd, path, d);
-		kclose(fd);
 	}
 	free(d);
 	return ans;

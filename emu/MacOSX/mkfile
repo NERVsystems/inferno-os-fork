@@ -1,6 +1,8 @@
 SYSTARG=MacOSX
+OBJTYPE=arm64
 <../../mkconfig
 SYSTARG=MacOSX
+OBJTYPE=arm64
 
 #Configurable parameters
 
@@ -8,17 +10,24 @@ CONF=emu			#default configuration
 CONFLIST=emu
 CLEANCONFLIST=
 
-INSTALLDIR=$ROOT/$SYSTARG/$OBJTYPE/bin	#path of directory where kernel is installed
+# GUI Backend Selection
+# Options: headless, sdl3
+# Default: headless (no display, terminal only)
+GUIBACK=headless
+
+INSTALLDIR=/sys/$SYSTARG/$OBJTYPE/bin	#path of directory where kernel is installed
 
 #end configurable parameters
 
-<$ROOT/mkfiles/mkfile-$SYSTARG-$OBJTYPE	#set vars based on target system
+<| sh ../port/mkdevlist < $CONF	#sets $IP, $DEVS, $PORT, $LIBS
 
-<| $SHELLNAME ../port/mkdevlist $CONF	#sets $IP, $DEVS, $PORT, $LIBS
+# Include GUI backend configuration
+<mkfile-gui-$GUIBACK
 
 OBJ=\
 	asm-$OBJTYPE.$O\
 	os.$O\
+	$GUISRC\
 	$CONF.root.$O\
 	lock.$O\
 	$DEVS\
@@ -26,31 +35,37 @@ OBJ=\
 
 HFILES=\
 
-CFLAGS='-DROOT="'$ROOT'"'\
-	'-DOBJTYPE="'$OBJTYPE'"'\
+CFLAGS=\
+	'''-DROOT="'.'"'''\
 	-DEMU -I. -I../port\
-	-I$ROOT/$SYSTARG/$OBJTYPE/include\
-	-I$ROOT/include -I$ROOT/libinterp\
-	$CTHREADFLAGS $CFLAGS $EMUOPTIONS\
+	-I../../$SYSTARG/$OBJTYPE/include\
+	-I../../include\
+	-I../../libinterp\
+	$CTHREADFLAGS $CFLAGS $EMUOPTIONS $GUIFLAGS\
 
-KERNDATE=`{$NDATE}
+KERNDATE=0
 
 SYSLIBS= \
 	-lm\
-	-framework Carbon -framework QuickTime\
 	-lpthread\
 	-framework CoreFoundation\
 	-framework IOKit\
 
 default:V:	$O.$CONF
 
-<../port/portmkfile
 
-$O.$CONF:	$OBJ $CONF.c $CONF.root.h $LIBFILES
+$O.$CONF:	$OBJ $CONF.c $CONF.root.h # $LIBNAMES
 	$CC $CFLAGS '-DKERNDATE='$KERNDATE $CONF.c
-	$LD $LDFLAGS -o $target $OBJ $CONF.$O $LIBFILES $SYSLIBS
+	$LD $LDFLAGS -o $target $OBJ $CONF.$O $LIBFILES $SYSLIBS $GUILIBS
 
 install:V: $O.$CONF
 	cp $O.$CONF $INSTALLDIR/$CONF
 
+# Explicit rule for asm-arm64.o to avoid macOS case-insensitive .s/.S ambiguity
+asm-arm64.$O:	asm-arm64.s
+	$AS $ASFLAGS asm-arm64.s
+
+<../port/portmkfile
+
+ipif.c:N:	../FreeBSD/ipif.c
 devfs.c:N:	../port/devfs-posix.c

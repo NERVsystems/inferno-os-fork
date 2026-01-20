@@ -158,7 +158,7 @@ freelist(Heap *h, int swept)
 	l = l->tail;
 	while(l != (List*)H) {
 		t = l->t;
-		th = D2H(l);
+		th = D2H((ulong)l);
 		if(th->ref-- != 1)
 			break;
 		th->t->ref--;	/* should be &Tlist and ref shouldn't go to 0 here nor be 0 already */
@@ -184,9 +184,7 @@ freemodlink(Heap *h, int swept)
 	Modlink *ml;
 
 	ml = H2D(Modlink*, h);
-	if(ml->m->rt == DYNMOD)
-		freedyndata(ml);
-	else if(!swept)
+	if(!swept)
 		destroy(ml->MP);
 	unload(ml->m);
 }
@@ -242,7 +240,7 @@ dtype(void (*destroy)(Heap*, int), int size, uchar *map, int mapsize)
 {
 	Type *t;
 
-	t = malloc(sizeof(Type)-sizeof(t->map)+mapsize);
+	t = malloc(sizeof(Type)+mapsize);
 	if(t != nil) {
 		t->ref = 1;
 		t->free = destroy;

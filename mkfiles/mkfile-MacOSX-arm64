@@ -1,0 +1,32 @@
+TARGMODEL=	Posix
+TARGSHTYPE=	sh
+CPUS=		arm64
+
+O=		o
+OS=		o
+
+AR=		/usr/bin/ar
+ARFLAGS=	rcs
+
+AS=		cc -c -arch arm64
+ASFLAGS=
+
+CC=		cc -c -arch arm64
+CFLAGS=		-g\
+		-O\
+		-fno-strict-aliasing\
+		-Wuninitialized -Wunused-variable -Wreturn-type -Wimplicit\
+		-I$ROOT/MacOSX/arm64/include\
+		-I$ROOT/include\
+		-DMACOSX_ARM64
+
+ANSICPP=
+LD=		cc -arch arm64
+LDFLAGS=
+
+SYSLIBS=
+
+YACC=		yacc
+YFLAGS=		-d
+
+MACOSINF=caseinsensitive	# nobble .S rules

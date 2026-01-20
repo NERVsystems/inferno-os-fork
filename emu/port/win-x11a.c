@@ -58,6 +58,7 @@
 
 static int displaydepth;
 extern ulong displaychan;
+extern void wmtrack(int, int, int, int);
 
 enum
 {
@@ -92,6 +93,7 @@ static int 		infernobtox11[256]; /* Values for mapping between */
 static int		triedscreen;
 static XDrawable		xdrawable;
 static void		xexpose(XEvent*);
+static void		xresize(XEvent*);
 static void		xmouse(XEvent*);
 static void		xkeyboard(XEvent*);
 static void		xsetcursor(XEvent*);
@@ -241,6 +243,10 @@ attachscreen(Rectangle *r, ulong *chan, int *d, int *width, int *softscreen)
 		xinitscreen(Xsize, Ysize, displaychan, chan, d);
 		/*
 		 * moved xproc from here to end since it could cause an expose event and
+	if(!triedscreen){
+		xinitscreen(Xsize, Ysize, displaychan, chan, d);
+		/*
+		 * moved xproc from here to end since it could cause an expose event and
 		 * hence a flushmemscreen before xscreendata is initialized
 		 */
 	}
@@ -304,35 +310,8 @@ copy32to32(Rectangle r)
 		lp = dp + width;
 		while(dp < lp){
 			v = *dp++;
-			w = v&(0xff<<24)|infernortox11[(v>>16)&0xff]<<16|infernogtox11[(v>>8)&0xff]<<8|infernobtox11[(v>>0)&0xff]<<0;
+			w = infernortox11[(v>>16)&0xff]<<16|infernogtox11[(v>>8)&0xff]<<8|infernobtox11[(v>>0)&0xff]<<0;
 			*wp++ = w;
-		}
-		dp += dx;
-		wp += dx;
-	}
-}
-
-static void
-copy16to16(Rectangle r)
-{
-	int dx, width;
-	u16int *dp, *wp, *edp, *lp;
-
-	width = Dx(r);
-	dx = Xsize - width;
-	dp = (u16int*)(gscreendata + ((r.min.y * Xsize) + r.min.x) * 2);
-	wp = (u16int*)(xscreendata + ((r.min.y * Xsize) + r.min.x) * 2);
-	edp = (u16int*)(gscreendata + ((r.max.y * Xsize) + r.max.x) * 2);
-
-	/* The pixel format should be the same as the underlying X display (see
-	   the xtruevisual function) unless a different channel format is
-	   explicitly specified on the command line, so just copy the pixel data
-	   without any processing. */
-
-	while(dp < edp) {
-		lp = dp + width;
-		while(dp < lp){
-			*wp++ = *dp++;
 		}
 		dp += dx;
 		wp += dx;
@@ -462,17 +441,6 @@ flushmemscreen(Rectangle r)
 	case 32:
 		copy32to32(r);
 		break;
-    case 16:
-        switch(xscreendepth){
-        case 16:
-            copy16to16(r);
-            break;
-        default:
-		    fprint(2, "emu: bad display depth %d chan %s xscreendepth %d\n", displaydepth,
-			    chantostr(chanbuf, displaychan), xscreendepth);
-		    cleanexit(0);
-        }
-        break;
 	case 8:
 		switch(xscreendepth){
 		case 24:
@@ -586,6 +554,7 @@ xproc(void *arg)
 		xselect(&event, xd);
 		xmouse(&event);
 		xexpose(&event);
+		xresize(&event);
 		xdestroy(&event);
 	}
 }
@@ -623,7 +592,6 @@ xcurslock(void)
 static void
 xcursunlock(void)
 {
-	coherence();
 	icursor.inuse = 0;
 }
 
@@ -928,7 +896,7 @@ xinitscreen(int xsize, int ysize, ulong reqchan, ulong *chan, int *d)
 	 * set up property as required by ICCCM
 	 */
 	memset(&name, 0, sizeof(name));
-	name.value = (uchar*)"inferno";
+	name.value = (uchar*)"Acme SAC";
 	name.encoding = XA_STRING;
 	name.format = 8;
 	name.nitems = strlen((char*)name.value);
@@ -942,9 +910,9 @@ xinitscreen(int xsize, int ysize, ulong reqchan, ulong *chan, int *d)
 	hints.initial_state = NormalState;
 
 	memset(&classhints, 0, sizeof(classhints));
-	classhints.res_name = "inferno";
-	classhints.res_class = "Inferno";
-	argv[0] = "inferno";
+	classhints.res_name = "Acme SAC";
+	classhints.res_class = "Acme SAC";
+	argv[0] = "Acme SAC";
 	argv[1] = nil;
 	XSetWMProperties(xdisplay, xdrawable,
 		&name,			/* XA_WM_NAME property for ICCCM */
@@ -969,7 +937,7 @@ xinitscreen(int xsize, int ysize, ulong reqchan, ulong *chan, int *d)
 	}
 
 	clipboard = XInternAtom(xmcon, "CLIPBOARD", False);
-	utf8string = XInternAtom(xmcon, "UTF8_STRING", True);
+	utf8string = XInternAtom(xmcon, "UTF8_STRING", False);
 	targets = XInternAtom(xmcon, "TARGETS", False);
 	text = XInternAtom(xmcon, "TEXT", False);
 	compoundtext = XInternAtom(xmcon, "COMPOUND_TEXT", False);
@@ -1137,6 +1105,7 @@ if(0){int i, j; for(i=0;i<256; i+=16){print("%3d", i); for(j=i; j<i+16; j++)prin
 		fprint(2, "emu: win-x11 unsupported visual class %d\n", xvis->class);
 		break;
 	}
+	return;
 }
 
 static void
@@ -1161,6 +1130,20 @@ creategc(XDrawable d)
 	gcv.function = GXcopy;
 	gcv.graphics_exposures = False;
 	return XCreateGC(xdisplay, d, GCFunction|GCGraphicsExposures, &gcv);
+}
+
+static void
+xresize(XEvent *e)
+{
+	int width, height;
+	XConfigureEvent *xe;
+
+	if(e->type != ConfigureNotify)
+		return;
+	xe = (XConfigureEvent*)e;
+	width = xe->width;
+	height = xe->height;
+	wmtrack(0, width, height, 0);
 }
 
 static void
@@ -1247,10 +1230,10 @@ xkeyboard(XEvent *e)
 		case XK_KP_Space:
 			k = ' ';
 			break;
-		case XK_Home:
-		case XK_KP_Home:
-			k = Home;
-			break;
+//		case XK_Home:
+//		case XK_KP_Home:
+//			k = Khome;
+//			break;
 		case XK_Left:
 		case XK_KP_Left:
 			k = Left;
@@ -1267,22 +1250,22 @@ xkeyboard(XEvent *e)
 		case XK_KP_Right:
 			k = Right;
 			break;
-		case XK_Page_Down:
-		case XK_KP_Page_Down:
-			k = Pgdown;
-			break;
+//		case XK_Page_Down:
+//		case XK_KP_Page_Down:
+//			k = Kpgdown;
+//			break;
 		case XK_End:
 		case XK_KP_End:
 			k = End;
 			break;
-		case XK_Page_Up:	
-		case XK_KP_Page_Up:
-			k = Pgup;
-			break;
-		case XK_Insert:
-		case XK_KP_Insert:
-			k = Ins;
-			break;
+//		case XK_Page_Up:	
+//		case XK_KP_Page_Up:
+//			k = Kpgup;
+//			break;
+//		case XK_Insert:
+//		case XK_KP_Insert:
+//			k = Kins;
+//			break;
 		case XK_KP_Enter:
 		case XK_Return:
 			k = '\n';
@@ -1523,7 +1506,7 @@ _xgetsnarf(XDisplay *xd)
 	 */
 	prop = 1;
 	XChangeProperty(xd, xdrawable, prop, XA_STRING, 8, PropModeReplace, (uchar*)"", 0);
-	XConvertSelection(xd, clipboard, utf8string, prop, xdrawable, CurrentTime);
+	XConvertSelection(xd, clipboard, XA_STRING, prop, xdrawable, CurrentTime);
 	XFlush(xd);
 	lastlen = 0;
 	for(i=0; i<10 || (lastlen!=0 && i<30); i++){
@@ -1613,11 +1596,11 @@ if(0) iprint("xselect target=%d requestor=%d property=%d selection=%d\n",
 			8, PropModeReplace, (uchar*)clip.buf, strlen(clip.buf));
 		qunlock(&clip.lk);
 	}else{
+		iprint("get %d\n", xe->target);
 		name = XGetAtomName(xd, xe->target);
 		if(name == nil)
-			name = "<XGetAtomName failed>";
-		if(strcmp(name, "TIMESTAMP") != 0
-			&& strcmp(name, "x-special/gnome-copied-files") != 0)
+			iprint("XGetAtomName failed\n");
+		else if(strcmp(name, "TIMESTAMP") != 0)
 			iprint("%s: cannot handle selection request for '%s' (%d)\n", argv0, name, (int)xe->target);
 		r.xselection.property = None;
 	}

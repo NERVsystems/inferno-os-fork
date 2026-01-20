@@ -223,7 +223,12 @@ enum
 	REGRET	= 4,
 	NREG	= 5,
 
-	IBY2WD	= 4,
+	/*
+	 * IBY2WD is now architecture-specific (sizeof pointer).
+	 * On 64-bit systems like ARM64, this is 8 bytes.
+	 * This follows the inferno64 pattern for 64-bit Dis VM support.
+	 */
+	IBY2WD	= sizeof(void*),	/* 4 on 32-bit, 8 on 64-bit */
 	IBY2FT	= 8,
 	IBY2LG	= 8,
 

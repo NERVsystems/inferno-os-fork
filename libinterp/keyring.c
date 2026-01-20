@@ -1520,6 +1520,9 @@ getmsgerr(char *buf, int n, int r)
 	char *e;
 	int l;
 
+	/* Null check added for security (cppcheck warning) */
+	if(buf == nil)
+		return;
 	e = r>0? MSG: "hungup";
 	l = strlen(e)+1;
 	if(n > l)

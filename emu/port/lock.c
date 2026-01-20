@@ -34,7 +34,6 @@ canlock(Lock *l)
 void
 unlock(Lock *l)
 {
-	coherence();
 	l->val = 0;
 }
 

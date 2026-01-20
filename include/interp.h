@@ -1,6 +1,11 @@
 typedef uchar		BYTE;		/* 8  bits */
-typedef int		WORD;		/* 32 bits */
-typedef unsigned int	UWORD;		/* 32 bits */
+/*
+ * WORD and UWORD are now architecture-specific (intptr/uintptr).
+ * On 64-bit systems like ARM64, these are 64 bits to match pointer size.
+ * This follows the inferno64 pattern for 64-bit Dis VM support.
+ */
+typedef intptr		WORD;		/* pointer-sized signed int */
+typedef uintptr		UWORD;		/* pointer-sized unsigned int */
 typedef vlong		LONG;		/* 64 bits */
 typedef uvlong		ULONG;		/* 64 bits */
 typedef double		REAL;		/* 64 double IEEE754 */

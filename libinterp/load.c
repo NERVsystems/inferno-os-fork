@@ -610,10 +610,7 @@ unload(Module *m)
 		last = &mm->link;
 	}
 
-	if(m->rt == DYNMOD)
-		freedyncode(m);
-	else
-		destroy(m->origmp);
+	destroy(m->origmp);
 
 	destroylinks(m);
 
