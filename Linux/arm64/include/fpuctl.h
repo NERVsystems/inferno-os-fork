@@ -1,6 +1,7 @@
 /*
- * Linux arm fpu support
+ * Linux arm64 fpu support
  * Mimic Plan9 floating point support
+ * Note: FPdbleword is defined in lib9.h
  */
 
 #include <fenv.h>
@@ -8,25 +9,28 @@
 static void
 setfcr(ulong fcr)
 {
+	/* arm64 uses FPCR register - Linux handles via fenv */
+	(void)fcr;
 }
 
 static ulong
 getfcr(void)
 {
 	ulong fcr = 0;
-	return fcr; 
+	return fcr;
 }
 
 static ulong
 getfsr(void)
 {
-	ulong fsr = -1;
+	ulong fsr = 0;
 	return fsr;
 }
 
 static void
 setfsr(ulong fsr)
 {
+	(void)fsr;
 }
 
 /* FCR */

@@ -1,7 +1,15 @@
-/* define _BSD_SOURCE to use ISO C, POSIX, and 4.3BSD things. */
+/*
+ * lib9.h for ARM64 Linux (Jetson, etc.)
+ * Based on MacOSX/arm64/include/lib9.h
+ * Adapted for Linux environment with proper 64-bit types
+ */
+
 #define	USE_PTHREADS
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
 #endif
 #define _XOPEN_SOURCE  500
 #define _LARGEFILE_SOURCE	1
@@ -10,8 +18,10 @@
 #ifdef USE_PTHREADS
 #define	_REENTRANT	1
 #endif
+
 #include <features.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #define sync __os_sync
@@ -20,51 +30,84 @@
 #include <errno.h>
 #define __NO_STRING_INLINES
 #include <string.h>
-/* #include "math.h" */
 #include <fcntl.h>
 #include <setjmp.h>
 #include <float.h>
+#include <time.h>
+#include <stdint.h>
+#include <ctype.h>
 #include <endian.h>
+/* #include <math.h>  - commented out to avoid isnan macro conflict with fdlibm */
 
+#define nil		((void*)0)
+
+typedef	unsigned char	uchar;
+typedef unsigned long	ulong;
+typedef	  signed char	schar;
+typedef	long long	vlong;
+typedef	unsigned long long	uvlong;
+typedef ushort		Rune;
+typedef uint32_t	u32int;
+typedef uvlong u64int;
+
+typedef uint32_t	mpdigit;	/* for /sys/include/mp.h */
+typedef uint16_t u16int;
+typedef uint8_t u8int;
+typedef uintptr_t uintptr;
+typedef intptr_t intptr;
+
+typedef int8_t	int8;
+typedef uint8_t	uint8;
+typedef int16_t	int16;
+typedef uint16_t	uint16;
+typedef int32_t	int32;
+typedef uint32_t	uint32;
+typedef int64_t	int64;
+typedef uint64_t	uint64;
+
+/* handle conflicts with host os libs */
 #define	getwd	infgetwd
+#define scalb	infscalb
+#define div 	infdiv
+#define panic	infpanic
+#define rint	infrint
+#define	rcmd	infrcmd
+#define	pow10	infpow10
 
 #ifndef EMU
 typedef struct Proc Proc;
 #endif
 
 /*
- * math module dtoa
- * #define __LITTLE_ENDIAN /usr/include/endian.h under linux
+ * math module dtoa - arm64 is little endian
+ * (endian.h already defines __LITTLE_ENDIAN, so we just check it)
  */
+#ifndef __LITTLE_ENDIAN
+#define __LITTLE_ENDIAN 1234
+#endif
 
-#define	nil		((void*)0)
+/*
+ * arm64 has 64-bit long, so we need USE_FPdbleword
+ * to correctly access double's 32-bit halves in dtoa.c
+ */
+#define USE_FPdbleword
 
-typedef unsigned char	uchar;
-typedef signed char	schar;
-typedef unsigned short	Rune;
-typedef long long int	vlong;
-typedef unsigned long long int	uvlong;
-typedef unsigned int u32int;
-typedef uvlong u64int;
-
-typedef unsigned int	mpdigit;	/* for /sys/include/mp.h */
-typedef unsigned short u16int;
-typedef unsigned char u8int;
-typedef unsigned long uintptr;
+typedef union {
+	double	x;
+	struct {
+		u32int	lo;	/* little endian: low word first */
+		u32int	hi;
+	};
+} FPdbleword;
 
 #define	USED(x)		if(x){}else{}
 #define	SET(x)
 
-#undef nelem
-#define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
+#define nelem(x)	(sizeof(x)/sizeof((x)[0]))
 #undef offsetof
-#define	offsetof(s, m)	(ulong)(&(((s*)0)->m))
 #undef assert
+#define	offsetof(s, m)	(ulong)(&(((s*)0)->m))
 #define	assert(x)	if(x){}else _assert("x")
-
-/*
- * most mem and string routines are declared by ANSI/POSIX files above
- */
 
 extern	char*	strecpy(char*, char*, char*);
 extern	char*	strdup(const char*);
@@ -72,18 +115,18 @@ extern	int	cistrncmp(char*, char*, int);
 extern	int	cistrcmp(char*, char*);
 extern	char*	cistrstr(char*, char*);
 extern	int	tokenize(char*, char**, int);
+extern	vlong	strtoll(const char*, char**, int);
+#define	qsort	infqsort
+extern	void	qsort(void*, long, long, int (*)(void*, void*));
 
 enum
 {
-	UTFmax		= 3,		/* maximum bytes per rune */
-	Runesync	= 0x80,		/* cannot represent part of a UTF sequence (<) */
-	Runeself	= 0x80,		/* rune and UTF sequences are the same (<) */
-	Runeerror	= 0x80		/* decoding error in UTF */
+	UTFmax		= 3,
+	Runesync	= 0x80,
+	Runeself	= 0x80,
+	Runeerror	= 0x80
 };
 
-/*
- * rune routines
- */
 extern	int	runetochar(char*, Rune*);
 extern	int	chartorune(Rune*, char*);
 extern	int	runelen(long);
@@ -118,9 +161,6 @@ extern	int	isspacerune(Rune);
 extern	int	istitlerune(Rune);
 extern	int	isupperrune(Rune);
 
-/*
- * malloc
- */
 extern	void*	malloc(size_t);
 extern	void*	mallocz(ulong, int);
 extern	void	free(void*);
@@ -133,20 +173,17 @@ extern	ulong	getmalloctag(void*);
 extern	ulong	getrealloctag(void*);
 extern	void*	malloctopoolblock(void*);
 
-/*
- * print routines
- */
 typedef struct Fmt	Fmt;
 struct Fmt{
-	uchar	runes;			/* output buffer is runes or chars? */
-	void	*start;			/* of buffer */
-	void	*to;			/* current place in the buffer */
-	void	*stop;			/* end of the buffer; overwritten if flush fails */
-	int	(*flush)(Fmt *);	/* called when to == stop */
-	void	*farg;			/* to make flush a closure */
-	int	nfmt;			/* num chars formatted so far */
-	va_list	args;			/* args passed to dofmt */
-	int	r;			/* % format Rune */
+	uchar	runes;
+	void	*start;
+	void	*to;
+	void	*stop;
+	int	(*flush)(Fmt *);
+	void	*farg;
+	int	nfmt;
+	va_list	args;
+	int	r;
 	int	width;
 	int	prec;
 	ulong	flags;
@@ -166,7 +203,6 @@ enum{
 	FmtVLong	= FmtLong << 1,
 	FmtComma	= FmtVLong << 1,
 	FmtByte	= FmtComma << 1,
-
 	FmtFlag		= FmtByte << 1
 };
 
@@ -204,15 +240,8 @@ extern	int	fmtvprint(Fmt*, char*, va_list);
 extern	int	fmtrune(Fmt*, int);
 extern	int	fmtstrcpy(Fmt*, char*);
 extern	int	fmtrunestrcpy(Fmt*, Rune*);
-/*
- * error string for %r
- * supplied on per os basis, not part of fmt library
- */
 extern	int	errfmt(Fmt *f);
 
-/*
- * quoted strings
- */
 extern	char	*unquotestrdup(char*);
 extern	Rune	*unquoterunestrdup(Rune*);
 extern	char	*quotestrdup(char*);
@@ -222,21 +251,13 @@ extern	int	quoterunestrfmt(Fmt*);
 extern	void	quotefmtinstall(void);
 extern	int	(*doquote)(int);
 
-/*
- * random number
- */
+extern	int	nrand(int);
 extern	ulong	truerand(void);
 extern	ulong	ntruerand(ulong);
 
-/*
- * math
- */
 extern	int	isNaN(double);
 extern	int	isInf(double, int);
-
-/*
- * Time-of-day
- */
+extern	double	pow(double, double);
 
 typedef struct Tm Tm;
 struct Tm {
@@ -253,23 +274,19 @@ struct Tm {
 };
 extern	vlong	osnsec(void);
 #define	nsec	osnsec
-	
-/*
- * one-of-a-kind
- */
+
 extern	void	_assert(char*);
 extern	double	charstod(int(*)(void*), void*);
 extern	char*	cleanname(char*);
-extern	uintptr	getcallerpc(void*);
+extern	double	frexp(double, int*);
 extern	int	getfields(char*, char**, int, int, char*);
 extern	char*	getuser(void);
 extern	char*	getwd(char*, int);
 extern	double	ipow10(int);
-#define	pow10	infpow10
+extern	double	ldexp(double, int);
+extern	double	modf(double, double*);
+extern	void	perror(const char*);
 extern	double	pow10(int);
-extern	vlong	strtoll(const char*, char**, int);
-#define	qsort	infqsort
-extern	void	qsort(void*, long, long, int (*)(void*, void*));
 extern	uvlong	strtoull(const char*, char**, int);
 extern	void	sysfatal(char*, ...);
 extern	int	dec64(uchar*, int, char*, int);
@@ -280,9 +297,12 @@ extern	int	dec16(uchar*, int, char*, int);
 extern	int	enc16(char*, int, uchar*, int);
 extern	int	encodefmt(Fmt*);
 
-/*
- *  synchronization
- */
+/* use builtin for arm64 */
+static __inline uintptr getcallerpc(void* dummy) {
+	(void)dummy;
+	return (uintptr)__builtin_return_address(0);
+}
+
 typedef
 struct Lock {
 	int	val;
@@ -298,24 +318,24 @@ extern	int	canlock(Lock*);
 typedef struct QLock QLock;
 struct QLock
 {
-	Lock	use;			/* to access Qlock structure */
-	Proc	*head;			/* next process waiting for object */
-	Proc	*tail;			/* last process waiting for object */
-	int	locked;			/* flag */
+	Lock	use;
+	Proc	*head;
+	Proc	*tail;
+	int	locked;
 };
 
 extern	void	qlock(QLock*);
 extern	void	qunlock(QLock*);
 extern	int	canqlock(QLock*);
-extern	void	_qlockinit(ulong (*)(ulong, ulong));	/* called only by the thread library */
+extern	void	_qlockinit(ulong (*)(ulong, ulong));
 
 typedef
 struct RWLock
 {
-	Lock	l;			/* Lock modify lock */
-	QLock	x;			/* Mutual exclusion lock */
-	QLock	k;			/* Lock for waiting writers */
-	int	readers;		/* Count of readers in lock */
+	Lock	l;
+	QLock	x;
+	QLock	k;
+	int	readers;
 } RWLock;
 
 extern	int	canrlock(RWLock*);
@@ -325,58 +345,49 @@ extern	void	runlock(RWLock*);
 extern	void	wlock(RWLock*);
 extern	void	wunlock(RWLock*);
 
-/*
- * network dialing
- */
 #define NETPATHLEN 40
 
-/*
- * system calls
- *
- */
-#define	STATMAX	65535U	/* max length of machine-independent stat structure */
-#define	DIRMAX	(sizeof(Dir)+STATMAX)	/* max length of Dir structure */
-#define	ERRMAX	128	/* max length of error string */
+#define	STATMAX	65535U
+#define	DIRMAX	(sizeof(Dir)+STATMAX)
+#define	ERRMAX	128
 
-#define	MORDER	0x0003	/* mask for bits defining order of mounting */
-#define	MREPL	0x0000	/* mount replaces object */
-#define	MBEFORE	0x0001	/* mount goes before others in union directory */
-#define	MAFTER	0x0002	/* mount goes after others in union directory */
-#define	MCREATE	0x0004	/* permit creation in mounted directory */
-#define	MCACHE	0x0010	/* cache some data */
-#define	MMASK	0x0017	/* all bits on */
+#define	MORDER	0x0003
+#define	MREPL	0x0000
+#define	MBEFORE	0x0001
+#define	MAFTER	0x0002
+#define	MCREATE	0x0004
+#define	MCACHE	0x0010
+#define	MMASK	0x0017
 
-#define	OREAD	0	/* open for read */
-#define	OWRITE	1	/* write */
-#define	ORDWR	2	/* read and write */
-#define	OEXEC	3	/* execute, == read but check execute permission */
-#define	OTRUNC	16	/* or'ed in (except for exec), truncate file first */
-#define	OCEXEC	32	/* or'ed in, close on exec */
-#define	ORCLOSE	64	/* or'ed in, remove on close */
-#define	OEXCL	0x1000	/* or'ed in, exclusive use (create only) */
+#define	OREAD	0
+#define	OWRITE	1
+#define	ORDWR	2
+#define	OEXEC	3
+#define	OTRUNC	16
+#define	OCEXEC	32
+#define	ORCLOSE	64
+#define	OEXCL	0x1000
 
-#define	AEXIST	0	/* accessible: exists */
-#define	AEXEC	1	/* execute access */
-#define	AWRITE	2	/* write access */
-#define	AREAD	4	/* read access */
+#define	AEXIST	0
+#define	AEXEC	1
+#define	AWRITE	2
+#define	AREAD	4
 
-/* bits in Qid.type */
-#define QTDIR		0x80		/* type bit for directories */
-#define QTAPPEND	0x40		/* type bit for append only files */
-#define QTEXCL		0x20		/* type bit for exclusive use files */
-#define QTMOUNT		0x10		/* type bit for mounted channel */
-#define QTAUTH		0x08		/* type bit for authentication file */
-#define QTFILE		0x00		/* plain file */
+#define QTDIR		0x80
+#define QTAPPEND	0x40
+#define QTEXCL		0x20
+#define QTMOUNT		0x10
+#define QTAUTH		0x08
+#define QTFILE		0x00
 
-/* bits in Dir.mode */
-#define DMDIR		0x80000000	/* mode bit for directories */
-#define DMAPPEND	0x40000000	/* mode bit for append only files */
-#define DMEXCL		0x20000000	/* mode bit for exclusive use files */
-#define DMMOUNT		0x10000000	/* mode bit for mounted channel */
-#define DMAUTH		0x08000000	/* mode bit for authentication file */
-#define DMREAD		0x4		/* mode bit for read permission */
-#define DMWRITE		0x2		/* mode bit for write permission */
-#define DMEXEC		0x1		/* mode bit for execute permission */
+#define DMDIR		0x80000000
+#define DMAPPEND	0x40000000
+#define DMEXCL		0x20000000
+#define DMMOUNT		0x10000000
+#define DMAUTH		0x08000000
+#define DMREAD		0x4
+#define DMWRITE		0x2
+#define DMEXEC		0x1
 
 typedef
 struct Qid
@@ -388,19 +399,17 @@ struct Qid
 
 typedef
 struct Dir {
-	/* system-modified data */
-	ushort	type;	/* server type */
-	uint	dev;	/* server subtype */
-	/* file data */
-	Qid	qid;	/* unique id from server */
-	ulong	mode;	/* permissions */
-	ulong	atime;	/* last read time */
-	ulong	mtime;	/* last write time */
-	vlong	length;	/* file length */
-	char	*name;	/* last element of path */
-	char	*uid;	/* owner name */
-	char	*gid;	/* group name */
-	char	*muid;	/* last modifier name */
+	ushort	type;
+	uint	dev;
+	Qid	qid;
+	ulong	mode;
+	ulong	atime;
+	ulong	mtime;
+	vlong	length;
+	char	*name;
+	char	*uid;
+	char	*gid;
+	char	*muid;
 } Dir;
 
 extern	Dir*	dirstat(char*);
@@ -414,17 +423,15 @@ extern	long	dirreadall(int, Dir**);
 typedef
 struct Waitmsg
 {
-	int pid;	/* of loved one */
-	ulong time[3];	/* of loved one & descendants */
+	int pid;
+	ulong time[3];
 	char	*msg;
 } Waitmsg;
 
 extern	void	_exits(char*);
-
 extern	void	exits(char*);
 extern	int	create(char*, int, int);
 extern	int	errstr(char*, uint);
-
 extern	void	perror(const char*);
 extern	long	readn(int, void*, long);
 extern	int	remove(const char*);
@@ -448,15 +455,10 @@ extern char *argv0;
 				switch(_argc)
 #define	ARGEND		SET(_argt);USED(_argt);USED(_argc); USED(_args);}USED(argv); USED(argc);
 #define	ARGF()		(_argt=_args, _args="",\
-				(*_argt? _argt: argv[1]? (argc--, *++argv): 0))
+			(*_argt? _argt: argv[1]? (argc--, *++argv): 0))
 #define	EARGF(x)	(_argt=_args, _args="",\
-				(*_argt? _argt: argv[1]? (argc--, *++argv): ((x), abort(), (char*)0)))
+			(*_argt? _argt: argv[1]? (argc--, *++argv): ((x), abort(), (char*)0)))
 
 #define	ARGC()		_argc
 
-/*
- *	Extensions for Inferno to basic libc.h
- */
-
 #define	setbinmode()
-

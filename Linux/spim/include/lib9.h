@@ -1,8 +1,5 @@
 /* define _BSD_SOURCE to use ISO C, POSIX, and 4.3BSD things. */
 #define	USE_PTHREADS
-#ifndef _DEFAULT_SOURCE
-#define	_DEFAULT_SOURCE
-#endif
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE
 #endif
@@ -46,7 +43,7 @@ typedef struct Proc Proc;
 
 typedef unsigned char	uchar;
 typedef signed char	schar;
-typedef unsigned int Rune;
+typedef unsigned short	Rune;
 typedef long long int	vlong;
 typedef unsigned long long int	uvlong;
 typedef unsigned int u32int;
@@ -80,12 +77,10 @@ extern	int	tokenize(char*, char**, int);
 
 enum
 {
-	UTFmax		= 4,		/* maximum bytes per rune */
+	UTFmax		= 3,		/* maximum bytes per rune */
 	Runesync	= 0x80,		/* cannot represent part of a UTF sequence (<) */
 	Runeself	= 0x80,		/* rune and UTF sequences are the same (<) */
-	Runeerror	= 0xFFFD,	/* decoding error in UTF */
-	Runemax		= 0x10FFFF,	/* 21-bit rune */
-	Runemask	= 0x1FFFFF,	/* bits used by runes (see grep) */
+	Runeerror	= 0x80		/* decoding error in UTF */
 };
 
 /*
@@ -239,7 +234,6 @@ extern	ulong	ntruerand(ulong);
  * math
  */
 extern	int	isNaN(double);
-extern	double	NaN(void);
 extern	int	isInf(double, int);
 
 /*
@@ -468,32 +462,3 @@ extern char *argv0;
 
 #define	setbinmode()
 
-
-extern	void	setfcr(ulong);
-extern	void	setfsr(ulong);
-extern	ulong	getfcr(void);
-extern	ulong	getfsr(void);
-
-/* FCR */
-#define	FCRBITS	0x00000F83
-#define	FPINEX	(1<<7)
-#define	FPUNFL	(1<<8)
-#define	FPOVFL	(1<<9)
-#define	FPZDIV	(1<<10)
-#define	FPINVAL	(1<<11)
-#define	FPRNR	(0<<0)
-#define	FPRZ	(1<<0)
-#define	FPRPINF	(2<<0)
-#define	FPRNINF	(3<<0)
-#define	FPRMASK	(3<<0)
-#define	FPPEXT	0
-#define	FPPSGL	0
-#define	FPPDBL	0
-#define	FPPMASK	0
-/* FSR */
-#define	FSRBITS	0x0003F07C
-#define	FPAINEX	(1<<2)
-#define	FPAOVFL	(1<<4)
-#define	FPAUNFL	(1<<3)
-#define	FPAZDIV	(1<<5)
-#define	FPAINVAL	(1<<6)

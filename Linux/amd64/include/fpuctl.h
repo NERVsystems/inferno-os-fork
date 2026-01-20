@@ -1,35 +1,50 @@
 /*
- * Linux arm fpu support
+ * Linux amd64 (x86_64) fpu support
  * Mimic Plan9 floating point support
+ * Based on Linux/386/include/fpuctl.h but adapted for 64-bit
  */
-
-#include <fenv.h>
 
 static void
 setfcr(ulong fcr)
 {
+	unsigned short cw = (unsigned short)(fcr ^ 0x3f);
+	__asm__ volatile (
+		"fldcw %0"
+		: /* no output */
+		: "m" (cw)
+	);
 }
 
 static ulong
 getfcr(void)
 {
-	ulong fcr = 0;
-	return fcr; 
+	unsigned short cw;
+	__asm__ volatile (
+		"fstcw %0"
+		: "=m" (cw)
+	);
+	return (ulong)(cw ^ 0x3f);
 }
 
 static ulong
 getfsr(void)
 {
-	ulong fsr = -1;
-	return fsr;
+	unsigned short sw;
+	__asm__ volatile (
+		"fstsw %0"
+		: "=m" (sw)
+	);
+	return (ulong)sw;
 }
 
 static void
 setfsr(ulong fsr)
 {
+	(void)fsr;
+	__asm__ volatile ("fclex");
 }
 
-/* FCR */
+/* FCR - FPU Control Register bits */
 #define	FPINEX	(1<<5)
 #define	FPUNFL	((1<<4)|(1<<1))
 #define	FPOVFL	(1<<3)
@@ -44,7 +59,8 @@ setfsr(ulong fsr)
 #define	FPPSGL	(0<<8)
 #define	FPPDBL	(2<<8)
 #define	FPPMASK	(3<<8)
-/* FSR */
+
+/* FSR - FPU Status Register bits (same as FCR for exceptions) */
 #define	FPAINEX	FPINEX
 #define	FPAOVFL	FPOVFL
 #define	FPAUNFL	FPUNFL

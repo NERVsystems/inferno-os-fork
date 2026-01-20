@@ -1,6 +1,6 @@
 MKAR=	archive
 
-<../../mkconfig
+<$ROOT/mkconfig
 
 TARG=mk
 
