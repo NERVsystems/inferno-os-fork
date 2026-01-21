@@ -76,7 +76,7 @@ See [docs/PERFORMANCE-SPECS.md](docs/PERFORMANCE-SPECS.md) for benchmarks.
 
 ## Formal Verification
 
-**InferNode includes the first-ever formal verification of Inferno OS namespace isolation.**
+**InferNode includes a preliminary formal verification of Inferno OS namespace isolation.**
 
 ✅ **Phase 1**: Namespace semantics (2,035 states, 0 errors)
 ✅ **Phase 2**: Locking protocol (4,830 states, 0 errors)
