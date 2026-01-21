@@ -17,8 +17,11 @@ mount -A tcp!127.0.0.1!5641 /n/llm >[2] /dev/null
 
 # Setup home directory based on platform
 if {~ $emuhost MacOSX Linux}{
-	# For macOS/Linux, mount host filesystem (synchronous)
-	trfs '#U*' /n/local >[2] /dev/null
+	# For macOS/Linux, mount host filesystem (must run in background - it's a server)
+	mkdir -p /n/local
+	trfs '#U*' /n/local &
+	# Give server time to start
+	sleep 1
 	# Get actual HOME from host
 	ghome=/n/local/^`{echo 'echo $HOME' | os sh}
 	home=$ghome
