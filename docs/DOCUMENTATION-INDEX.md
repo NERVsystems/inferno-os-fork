@@ -40,6 +40,7 @@
 | **SHELL-ISSUE.md** | Shell investigation | Debuggers |
 | **HEADLESS-STATUS.md** | Headless build | Developers |
 | **RUNNING-ACME.md** | Acme editor with X11 | Acme users |
+| **XENITH.md** | Xenith GUI for AI agents | Users & Developers |
 | **STATUS.md** | Work-in-progress notes | Historical |
 
 ## The Story in Brief

@@ -44,7 +44,21 @@ See [QUICKSTART.md](QUICKSTART.md) for details.
 
 ## GUI Support (Optional)
 
-InferNode supports an **optional SDL3 GUI backend** for graphical applications like Acme and the window manager.
+InferNode supports an **optional SDL3 GUI backend** with **Xenith** as the default graphical interface.
+
+### Xenith - AI-Native Text Environment
+
+Xenith is an Acme fork optimized for AI agents and AI-human collaboration:
+
+- **9P Filesystem Interface** - Agents interact via file operations, no SDK needed
+- **Namespace Security** - Capability-based containment for AI agents
+- **Observable** - All agent activity visible to humans
+- **Multimodal** - Text and images in the same environment
+- **Dark Mode** - Modern theming (Catppuccin) with full customization
+
+See [docs/XENITH.md](docs/XENITH.md) for details.
+
+### Building with GUI
 
 ```bash
 # Install SDL3 (macOS)
@@ -54,7 +68,10 @@ brew install sdl3 sdl3_ttf
 cd emu/MacOSX
 mk GUIBACK=sdl3 o.emu
 
-# Run Acme editor (graphical)
+# Run Xenith (AI-native interface)
+./o.emu -r../.. xenith
+
+# Run Acme (traditional)
 ./o.emu -r../.. acme
 
 # Run window manager
