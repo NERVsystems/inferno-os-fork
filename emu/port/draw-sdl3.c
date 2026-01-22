@@ -193,7 +193,7 @@ sdl3_preinit(void)
 	}
 
 	/* Set app metadata for macOS menu bar and About dialog */
-	SDL_SetAppMetadata("Infernode", "1.0", "systems.nerv.infernode");
+	SDL_SetAppMetadata("InferNode", "1.0", "systems.nerv.infernode");
 
 	driver = SDL_GetCurrentVideoDriver();
 	USED(driver);
@@ -236,7 +236,7 @@ attachscreen(Rectangle *r, ulong *chan, int *d, int *width, int *softscreen)
 
 	dispatch_sync(dispatch_get_main_queue(), ^{
 		created_window = SDL_CreateWindow(
-			"Infernode",
+			"InferNode",
 			sdl_width, sdl_height,
 			SDL_WINDOW_RESIZABLE
 		);
@@ -275,7 +275,7 @@ attachscreen(Rectangle *r, ulong *chan, int *d, int *width, int *softscreen)
 #else
 	/* Linux/Windows: Direct call */
 	sdl_window = SDL_CreateWindow(
-		"Infernode",
+		"InferNode",
 		sdl_width, sdl_height,
 		SDL_WINDOW_RESIZABLE
 	);
