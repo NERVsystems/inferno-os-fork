@@ -215,10 +215,19 @@ Planned enhancements (see `IDEAS.md`):
 
 ## See Also
 
+### Learning Acme
+
+Xenith inherits Acme's interaction model. These resources explain the fundamentals:
+
+- [A Tour of Acme](https://www.youtube.com/watch?v=dP1xVpMPn8M) - Russ Cox's video tutorial (recommended starting point)
+- [Acme homepage](http://acme.cat-v.org) - Documentation, resources, and community
+- [Acme: A User Interface for Programmers](http://doc.cat-v.org/plan_9/4th_edition/papers/acme/) - Rob Pike's original paper
+
+### Xenith-Specific
+
 - `appl/xenith/DESIGN.md` - Detailed design rationale
 - `appl/xenith/IDEAS.md` - Feature roadmap
 - `appl/xenith/IMAGE.md` - Image implementation details
-- [Acme: A User Interface for Programmers](http://doc.cat-v.org/plan_9/4th_edition/papers/acme/) - Rob Pike's original paper
 
 ## License
 
