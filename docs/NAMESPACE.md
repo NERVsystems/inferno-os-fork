@@ -40,6 +40,111 @@ When InferNode starts, the emulator creates a minimal root namespace:
 
 This is NOT the host filesystem - it's InferNode's internal virtual filesystem.
 
+---
+
+## Synthetic Devices
+
+InferNode uses **synthetic devices** (also called kernel devices) identified by the `#`
+character followed by a letter. These provide direct access to kernel services without
+going through the normal filesystem hierarchy.
+
+### Device Syntax
+
+```
+#X        - Device X with default parameters
+#X*       - Device X with wildcard/all access
+#Xspec    - Device X with specific parameters
+```
+
+### Common Synthetic Devices
+
+| Device | Name | Description |
+|--------|------|-------------|
+| `#c` | cons | Console device (keyboard, screen) |
+| `#d` | draw | Graphics/display device |
+| `#e` | env | Environment variables |
+| `#p` | prog | Process information (like /proc) |
+| `#I` | ip | Network stack (TCP/IP) |
+| `#U` | fs | Host filesystem (Unix/macOS) |
+| `#s` | srv | Named file servers |
+| `#|` | pipe | Anonymous pipes |
+| `#M` | mnt | Mount driver |
+
+### The Host Filesystem Device (`#U`)
+
+The most important synthetic device for macOS users is `#U`, which provides access
+to the host operating system's filesystem:
+
+```sh
+# Mount entire host filesystem
+trfs '#U*' /n/local
+
+# After mounting:
+ls /n/local/Users           # List macOS /Users
+cat /n/local/etc/hosts      # Read host's /etc/hosts
+```
+
+The `*` after `#U` means "entire filesystem". Without it, you get a more restricted view.
+
+**Why quotes?** The `#` character has special meaning in the shell (comment), so you
+must quote it: `'#U*'` or `"#U*"`.
+
+### Using Synthetic Devices Directly
+
+You can bind synthetic devices directly into your namespace:
+
+```sh
+# Bind console device
+bind '#c' /dev
+
+# Bind draw device
+bind '#d' /dev
+
+# Bind network stack
+bind -a '#I' /net
+```
+
+### Device Initialization
+
+When the emulator starts, it automatically binds essential devices:
+
+```sh
+# These happen automatically in emuinit:
+bind '#c' /dev          # Console
+bind '#d' /dev          # Draw (graphics)
+bind '#p' /prog         # Process info
+bind '#e' /env          # Environment
+```
+
+### Creating Custom Device Bindings
+
+For special configurations, you can rebind devices:
+
+```sh
+# Create isolated network namespace
+bind '#I' /net/isolated
+
+# Overlay a custom console
+bind -b '#c' /dev/custom
+```
+
+### Device Files
+
+Once bound, devices expose files you can read/write:
+
+```
+/dev/cons       - Console input/output
+/dev/consctl    - Console control
+/dev/draw       - Graphics operations
+/dev/pointer    - Mouse/trackpad
+/dev/keyboard   - Keyboard events
+/dev/user       - Current username
+/prog/n/status  - Process n status
+/env/PATH       - PATH environment variable
+```
+
+---
+
 ### Accessing the Host Filesystem
 
 The host (macOS/Linux) filesystem is NOT automatically available. You must explicitly

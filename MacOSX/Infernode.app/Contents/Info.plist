@@ -9,9 +9,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>systems.nerv.infernode</string>
 	<key>CFBundleName</key>
-	<string>Infernode</string>
+	<string>InferNode</string>
 	<key>CFBundleDisplayName</key>
-	<string>Infernode</string>
+	<string>InferNode</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
