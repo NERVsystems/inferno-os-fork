@@ -210,7 +210,7 @@ winproc(void *a)
 		;
 
 	CreateNewWindow(kDocumentWindowClass, windowAttrs, &winRect, &theWindow);
-	SetWindowTitleWithCFString(theWindow, CFSTR("Acme SAC"));
+	SetWindowTitleWithCFString(theWindow, CFSTR("InferNode"));
 
 	if(PasteboardCreate(kPasteboardClipboard, &appleclip) != noErr)
 		sysfatal("pasteboard create failed");

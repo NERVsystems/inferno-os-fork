@@ -27,7 +27,7 @@ The ARM64 64-bit porting is **100% complete and successful**. All core component
 
 4. **Build System**
    - Updated makemk.sh for ARM64
-   - Fixed acme-sac.sh to detect arm64
+   - Fixed InferNode.sh to detect arm64
    - Created mkfile-MacOSX-arm64
 
 ### Binaries Built
@@ -45,7 +45,7 @@ The ARM64 64-bit porting is **100% complete and successful**. All core component
 - dis/sh/*.dis (12 shell builtins)
 - dis/lib/*.dis (10+ library modules)
 - dis/{mntgen,trfs,os,cat,mkdir,cp,bind,mount,ftest,cd}.dis
-- dis/acme/acme.dis (Acme SAC)
+- dis/acme/acme.dis (Acme editor)
 
 ## ❌ BLOCKING ISSUE: No Output from Dis Programs
 
@@ -142,7 +142,7 @@ Find where Dis programs' initial file descriptors (0, 1, 2) are created and veri
 
 ### Compare with Working Build
 
-If you can find a working 32-bit acme-sac binary, run it and compare behavior.
+If you can find a working 32-bit InferNode binary, run it and compare behavior.
 
 ## Current Status
 

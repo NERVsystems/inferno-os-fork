@@ -39,7 +39,7 @@
 | **OUTPUT-ISSUE.md** | Console debugging | Debuggers |
 | **SHELL-ISSUE.md** | Shell investigation | Debuggers |
 | **HEADLESS-STATUS.md** | Headless build | Developers |
-| **RUNNING-ACME.md** | Acme SAC with X11 | Acme users |
+| **RUNNING-ACME.md** | Acme editor with X11 | Acme users |
 | **STATUS.md** | Work-in-progress notes | Historical |
 
 ## The Story in Brief
@@ -135,7 +135,7 @@ All regenerated with 64-bit limbo
 
 - inferno64: https://github.com/caerwynj/inferno64
 - inferno-os: https://github.com/inferno-os/inferno-os
-- acme-sac: https://github.com/caerwynj/acme-sac
+- InferNode: https://github.com/caerwynj/InferNode
 - Inferno Shell paper: https://www.vitanuova.com/inferno/papers/sh.html
 - EMU manual: https://vitanuova.com/inferno/man/1/emu.html
 

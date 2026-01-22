@@ -94,7 +94,7 @@ User's suggestion to check these repositories was exactly right!
 2. Compile all 111 library modules in appl/lib/
 3. Remove debug output for clean operation
 4. Test networking (9P, mounting)
-5. Test Acme SAC with graphics (requires XQuartz)
+5. Test Acme editor with graphics (requires XQuartz)
 6. Port native macOS graphics (replace deprecated Carbon with Cocoa)
 
 **But the core goal is achieved:** A working 64-bit ARM64 Inferno system with functional shell and networking.
@@ -117,7 +117,7 @@ User's suggestion to check these repositories was exactly right!
 - `makemk.sh` - ARM64 support
 - `mkconfig` - ARM64 configuration
 - `mkfiles/mkfile-MacOSX-arm64` - Platform makefile
-- `acme-sac.sh` - ARM64 detection
+- `InferNode.sh` - ARM64 detection
 
 **ARM64 implementation:**
 - `emu/MacOSX/asm-arm64.s` - Assembly support

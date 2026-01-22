@@ -34,4 +34,4 @@ sys/OpenBSD
 sys/Solaris
 Dockerfile
 .dockerignore
-acme-sac
+infernode

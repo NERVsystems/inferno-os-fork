@@ -150,7 +150,7 @@ hello from inferno
 **GitHub:** https://github.com/NERVsystems/infernode
 **Commits:** 69
 **Documentation:** 21 files in docs/
-**License:** As per original Inferno/acme-sac
+**License:** As per original Inferno/InferNode
 
 ## Next Steps (Optional)
 
@@ -189,7 +189,7 @@ All should pass.
 ## Credits
 
 Built from:
-- **acme-sac** (starting point)
+- **InferNode** (starting point)
 - **inferno64** (critical fixes - quanta, shell)
 - **inferno-os** (reference)
 

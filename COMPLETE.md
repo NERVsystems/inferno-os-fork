@@ -61,7 +61,7 @@
 
 ## The Complete Journey
 
-**Starting Point:** acme-sac (32-bit, broken)
+**Starting Point:** InferNode (32-bit, broken)
 **Ending Point:** infernode (64-bit, working, documented)
 
 **Time Investment:** ~10-12 hours

@@ -124,11 +124,13 @@ mk install
 
 ## About
 
-InferNode is a specialized fork of [acme-sac](https://github.com/caerwynj/acme-sac), focused on headless operation and modern 64-bit platforms. It provides a complete Inferno OS environment optimized for embedded systems, servers, and AI applications.
+InferNode is a GPL-free Inferno OS distribution developed by NERV Systems, focused on headless operation and modern 64-bit platforms. It provides a complete Inferno OS environment optimized for embedded systems, servers, and AI agent applications. InferNode's namespace model provides a capability-based security architecture well-suited for AI agent isolation.
+
+Inspired by the concept of standalone Inferno environments, InferNode builds on the MIT-licensed Inferno OS codebase to deliver a lightweight, headless-capable system.
 
 ## License
 
-As per original Inferno OS and acme-sac licenses.
+MIT License (as per original Inferno OS).
 
 ---
 

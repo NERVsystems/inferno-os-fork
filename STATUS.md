@@ -128,7 +128,7 @@ Test 9P networking, mounting, etc.
 
 ## 🔗 References
 
-- acme-sac: https://github.com/caerwynj/acme-sac
+- InferNode: https://github.com/caerwynj/InferNode
 - inferno64: https://github.com/caerwynj/inferno64 (incomplete ARM64)
 - inferno-os: https://github.com/inferno-os/inferno-os (full source)
 

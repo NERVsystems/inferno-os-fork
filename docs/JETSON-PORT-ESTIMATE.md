@@ -142,7 +142,7 @@ If we hit:
 ## Comparison to This Port
 
 ### This Port (MacOSX ARM64)
-- **Started from:** acme-sac (32-bit, no ARM64)
+- **Started from:** InferNode (32-bit, no ARM64)
 - **Challenges:**
   - Discover all 64-bit issues
   - Fix pool quanta (took time to find)

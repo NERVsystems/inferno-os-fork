@@ -177,7 +177,7 @@ mk headers  # or manually regenerate
 
 | Aspect | infernode | inferno64 |
 |--------|-----------|-----------|
-| Base | acme-sac | inferno-os |
+| Base | InferNode | inferno-os |
 | Focus | Headless/embedded | Full Inferno |
 | 64-bit fixes | Complete | Partial |
 | Documentation | Extensive | Standard |

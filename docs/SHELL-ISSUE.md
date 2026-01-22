@@ -30,7 +30,7 @@ According to official Inferno documentation:
    - sh CAN run in text mode: "bare shell with no graphical environment, just 'emu' running inside a VT100"
    - Draw module can be loaded but not used for graphics
 
-3. **Shell profile** ([acme-sac startup](https://groups.google.com/g/acme-sac/c/DNi8a_Y43yU)):
+3. **Shell profile** ([InferNode startup](https://groups.google.com/g/InferNode/c/DNi8a_Y43yU)):
    - When `-l` flag used, shell runs `/lib/sh/profile`
    - Profile sets up filesystem mounts, environment
    - Then runs user profile `$home/lib/profile`
@@ -173,5 +173,5 @@ This suggests the shell code path reaches the input reading part but never gets 
 - [Inferno EMU manual](https://vitanuova.com/inferno/man/1/emu.html)
 - [The Inferno Shell](https://www.vitanuova.com/inferno/papers/sh.html)
 - [Inferno Shell guide](https://powerman.name/doc/Inferno/sh_en)
-- [acme-sac startup customization](https://groups.google.com/g/acme-sac/c/DNi8a_Y43yU)
+- [InferNode startup customization](https://groups.google.com/g/InferNode/c/DNi8a_Y43yU)
 - [Using Inferno OS on Linux](https://bluishcoder.co.nz/2014/12/31/using-inferno-os-on-linux.html)

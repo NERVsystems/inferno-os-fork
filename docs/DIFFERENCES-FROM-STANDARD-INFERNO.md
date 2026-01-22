@@ -1,6 +1,6 @@
 # Differences Between infernode and Standard Inferno
 
-**Purpose:** Document how infernode (derived from acme-sac) differs from canonical Inferno OS
+**Purpose:** Document how infernode (derived from InferNode) differs from canonical Inferno OS
 
 **Reference:** https://github.com/inferno-os/inferno-os (standard Inferno)
 
@@ -14,7 +14,7 @@
 - Designed as standalone OS or hosted environment
 - Full window manager and graphics stack
 
-**infernode (acme-sac derived):**
+**infernode (InferNode derived):**
 - "Chopped-top" minimal version
 - Originally focused on Acme as primary interface
 - Now: Headless-capable with console focus
@@ -92,7 +92,7 @@
 - Minimal - expects users to customize
 - No automatic host filesystem mounting
 
-**infernode (acme-sac):**
+**infernode (InferNode):**
 - **25 lines:** Full setup script
 - Automatically mounts host filesystem with `trfs`
 - Creates `/n/local` → Mac filesystem
@@ -100,7 +100,7 @@
 - Binds tmp, creates directories
 - **Much more opinionated/automated**
 
-This is a MAJOR difference - acme-sac assumes Acme workflow.
+This is a MAJOR difference - InferNode assumes Acme workflow.
 
 ## Utilities Comparison
 
@@ -161,11 +161,11 @@ Core libraries only:
 - Uses standard sh.b from inferno-os
 - Basic exception handling
 
-### infernode (acme-sac)
+### infernode (InferNode)
 
 **Originally:** Had broken exception handling (BADOP errors)
 **Now:** Uses inferno64's sh.b (fixed exception handling)
-**Better than:** Original acme-sac version
+**Better than:** Original InferNode version
 
 ## Graphics and Window Manager
 
@@ -193,7 +193,7 @@ Core libraries only:
 - No automatic mounts
 - Clean slate approach
 
-### infernode (acme-sac)
+### infernode (InferNode)
 
 **Opinionated profile:**
 - Auto-mounts host filesystem
@@ -203,7 +203,7 @@ Core libraries only:
 
 **This is philosophical:**
 - Standard: Flexible, user-driven
-- acme-sac: Automated, Acme-focused
+- InferNode: Automated, Acme-focused
 
 ## Build System Differences
 

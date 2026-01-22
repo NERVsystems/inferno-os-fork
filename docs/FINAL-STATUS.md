@@ -184,7 +184,7 @@ Each commit has detailed explanation of what changed and why.
 ### Current
 - Debug output still enabled (verbose)
 - X11 version not tested (requires XQuartz)
-- Acme SAC not tested with full system
+- Acme editor not tested with full system
 - Native macOS graphics not available (Carbon deprecated)
 
 ### Future Work
@@ -199,7 +199,7 @@ Each commit has detailed explanation of what changed and why.
 ### Key Resources
 - **inferno64** by caerwynj - Provided critical quanta fix
 - **inferno-os** - Standard Inferno reference
-- **acme-sac** - Starting point for minimal system
+- **InferNode** - Starting point for minimal system
 
 ### Debugging Approach
 - Systematic tracing from emulator startup through Dis execution

@@ -27,7 +27,7 @@ OBJ=\
 
 HFILES=\
 
-CFLAGS= '''-DROOT="/home/caerwy/workspace/acme-sac"''' -DEMU -I. -I../port -I../../$SYSTARG/$OBJTYPE/include -I../../include -I../../libinterp $CTHREADFLAGS $CFLAGS $EMUOPTIONS
+CFLAGS= '''-DROOT="/usr/local/infernode"''' -DEMU -I. -I../port -I../../$SYSTARG/$OBJTYPE/include -I../../include -I../../libinterp $CTHREADFLAGS $CFLAGS $EMUOPTIONS
 #SYSLIBS=$EMULIBS
 KERNDATE=`{$NDATE}
 

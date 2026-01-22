@@ -1,4 +1,4 @@
-# Running Acme SAC on ARM64 macOS
+# Running Acme editor on ARM64 macOS
 
 ## Current Status
 
@@ -32,7 +32,7 @@
 ```bash
 cd /Users/pdfinn/github.com/NERVsystems/nerva-9p-paper/inferno/infernode
 export DISPLAY=:0
-./acme-sac.sh
+./InferNode.sh
 ```
 
 ### Method 2: Direct execution
@@ -131,7 +131,7 @@ When run in an X11 terminal with DISPLAY set, the emulator:
 1. Rebuilt limbo compiler with 64-bit WORD values
 2. Regenerated all module headers (*mod.h, runt.h) for 64-bit
 3. Fixed BHDRSIZE calculation (24 bytes, not 64 bytes)
-4. Compiled Acme SAC and library modules with 64-bit limbo
+4. Compiled Acme editor and library modules with 64-bit limbo
 5. Rebuilt emulator with all fixes
 
 The ARM64 64-bit Inferno VM is fully functional - we just need to figure out the display/startup issue.

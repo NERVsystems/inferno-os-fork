@@ -115,7 +115,7 @@ The magic value `0x100374fa0` is a pointer address (not a valid magic constant l
 - [x] Module headers regenerated (all *mod.h files)
 - [x] Emulator rebuilt with new 64-bit headers
 - [x] BHDRSIZE calculation bug fixed
-- [x] **Acme SAC running successfully!** ✅
+- [x] **Acme editor running successfully!** ✅
 - [x] Built-in Limbo compiler (appl/cmd/limbo/) updated for 64-bit
 
 ## Status Update
@@ -160,7 +160,7 @@ The final blocker was an incorrect BHDRSIZE calculation:
 
 The Bhdr.u.data field IS the user data, not overhead. The incorrect 64-byte value broke all pool block traversal, causing D2B() to find freed blocks (MAGIC_F) instead of allocated blocks (MAGIC_A).
 
-## How to Run Acme SAC
+## How to Run Acme editor
 
 ### Prerequisites
 
@@ -197,7 +197,7 @@ export DISPLAY=:0
 ### Source Repositories
 
 - **infernode** (this fork): Intended for extensive modifications, not backward compatible
-- **acme-sac**: https://github.com/caerwynj/acme-sac - Original Acme SAC (32-bit)
+- **InferNode**: https://github.com/caerwynj/InferNode - Original Acme editor (32-bit)
 - **inferno64**: https://github.com/caerwynj/inferno64 - Incomplete 64-bit Inferno port (ARM64 explicitly incomplete, but may have useful patterns)
 - **inferno-os**: https://github.com/inferno-os/inferno-os - Full Inferno distribution (complete source)
 

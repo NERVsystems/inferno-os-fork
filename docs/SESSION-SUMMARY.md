@@ -85,7 +85,7 @@
 **Symptom if wrong:** Programs run but produce NO output
 
 ### Fix #4: Shell Exception Handling
-**Problem:** acme-sac shell had broken exception recovery
+**Problem:** InferNode shell had broken exception recovery
 **Solution:** Use inferno64's sh.b with proper exception handling
 **Symptom if wrong:** BADOP errors on command failures
 

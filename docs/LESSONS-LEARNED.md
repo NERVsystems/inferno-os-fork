@@ -305,7 +305,7 @@ For headless mode, also:
 ### Source Repositories
 - **inferno64:** https://github.com/caerwynj/inferno64 - Working 64-bit (amd64, arm64 in progress)
 - **inferno-os:** https://github.com/inferno-os/inferno-os - Standard Inferno
-- **acme-sac:** https://github.com/caerwynj/acme-sac - Acme standalone
+- **InferNode:** https://github.com/caerwynj/InferNode - Acme standalone
 
 ### Key Commits in inferno64
 - "change memory pointers to uintptr" (Jul 2021) - Critical 64-bit fix
@@ -404,7 +404,7 @@ echo 'sys->print("test\n");' in a Dis program
 
 If porting to another 64-bit architecture (RISC-V, ARM64 on other OS, etc.):
 
-1. **Start with inferno64 as base**, not acme-sac or standard inferno-os
+1. **Start with inferno64 as base**, not InferNode or standard inferno-os
 2. **Check ALL these files** for 32-bit assumptions:
    - Memory size types (ulong → uintptr)
    - Pointer casts (int → uintptr)

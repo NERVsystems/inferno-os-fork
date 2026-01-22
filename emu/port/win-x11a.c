@@ -896,7 +896,7 @@ xinitscreen(int xsize, int ysize, ulong reqchan, ulong *chan, int *d)
 	 * set up property as required by ICCCM
 	 */
 	memset(&name, 0, sizeof(name));
-	name.value = (uchar*)"Acme SAC";
+	name.value = (uchar*)"InferNode";
 	name.encoding = XA_STRING;
 	name.format = 8;
 	name.nitems = strlen((char*)name.value);
@@ -910,9 +910,9 @@ xinitscreen(int xsize, int ysize, ulong reqchan, ulong *chan, int *d)
 	hints.initial_state = NormalState;
 
 	memset(&classhints, 0, sizeof(classhints));
-	classhints.res_name = "Acme SAC";
-	classhints.res_class = "Acme SAC";
-	argv[0] = "Acme SAC";
+	classhints.res_name = "InferNode";
+	classhints.res_class = "InferNode";
+	argv[0] = "InferNode";
 	argv[1] = nil;
 	XSetWMProperties(xdisplay, xdrawable,
 		&name,			/* XA_WM_NAME property for ICCCM */

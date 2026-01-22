@@ -1,6 +1,6 @@
 # Makefile exists for snap
 #
-ROOT=/home/pi/github/acme-sac
+ROOT=/home/pi/github/infernode
 objtype=arm
 
 all: utils/mk/mk
