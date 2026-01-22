@@ -114,9 +114,17 @@ See [docs/PERFORMANCE-SPECS.md](docs/PERFORMANCE-SPECS.md) for benchmarks.
 
 ## Platforms
 
-- **ARM64 Linux** - Jetson AGX, Raspberry Pi 4/5
-- **AMD64 Linux** - Containers, minimal Linux
-- **ARM64 macOS** - Apple Silicon (M1/M2/M3)
+| Platform | VM (Interpreter) | JIT Compiler | Status |
+|----------|------------------|--------------|--------|
+| AMD64 Linux | ✅ Working | ✅ Working | **Production Ready** |
+| ARM64 Linux | ✅ Working | ⚠️ In Development | Interpreter mode stable |
+| ARM64 macOS | ✅ Working | ⚠️ In Development | Interpreter mode stable |
+
+### Platform Details
+
+- **AMD64 Linux** - Full JIT support for maximum performance. Containers, servers, workstations.
+- **ARM64 Linux** - Jetson AGX, Raspberry Pi 4/5. JIT in development on `feature/arm64-jit` branch.
+- **ARM64 macOS** - Apple Silicon (M1/M2/M3/M4). SDL3 GUI with Metal acceleration.
 
 ## Documentation
 
@@ -138,6 +146,26 @@ See [docs/PERFORMANCE-SPECS.md](docs/PERFORMANCE-SPECS.md) for benchmarks.
 export PATH="$PWD/MacOSX/arm64/bin:$PATH"
 mk install
 ```
+
+## Development Status
+
+### Working
+
+- **Dis Virtual Machine** - Fully functional on all platforms (interpreter mode)
+- **AMD64 JIT Compiler** - Production ready, significant performance boost
+- **SDL3 GUI Backend** - Cross-platform graphics with Metal/Vulkan/D3D
+- **Xenith** - AI-native text environment (Acme fork)
+- **All 280+ utilities** - Shell, networking, filesystems, development tools
+
+### In Development
+
+- **ARM64 JIT Compiler** - Basic programs work (echo, cat, sh). Blocked on AXIMM storage scaling issue (32-slot limit). See `feature/arm64-jit` branch and `docs/arm64-jit/` for details.
+
+### Roadmap
+
+- Complete ARM64 JIT compiler
+- Linux ARM64 SDL3 GUI support
+- Windows port
 
 ## About
 
