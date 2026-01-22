@@ -66,12 +66,12 @@ if [ -f o.emu ]; then
     otool -L o.emu | grep -i sdl
     echo ""
 
-    # Copy to Infernode for app bundle (macOS menu shows executable name)
-    cp o.emu Infernode
-    echo "Copied o.emu -> Infernode (for Infernode.app bundle)"
+    # Copy to InferNode for app bundle (macOS menu shows executable name)
+    cp o.emu InferNode
+    echo "Copied o.emu -> InferNode (for InferNode.app bundle)"
     echo ""
     echo "Launch with:"
-    echo "  open $ROOT/MacOSX/Infernode.app"
+    echo "  open $ROOT/MacOSX/InferNode.app"
     echo ""
     echo "Or run directly:"
     echo "  ./o.emu -r../.. sh -l -c 'xenith -t dark'"
