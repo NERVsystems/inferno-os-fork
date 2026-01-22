@@ -3,7 +3,7 @@
 # Get the directory containing this script (Contents/MacOS)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Navigate to infernode root (MacOSX/Infernode.app/Contents/MacOS -> infernode root)
+# Navigate to InferNode root (MacOSX/Infernode.app/Contents/MacOS -> root)
 INFERNODE_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Determine architecture
