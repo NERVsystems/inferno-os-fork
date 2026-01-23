@@ -80,7 +80,7 @@ SYSTEM_PROMPT := "You are an agent running inside Inferno OS with a namespace-bo
     "Create window: xenith new (returns window ID)\n" +
     "Write to window body: xenith write <id> <text>\n" +
     "Delete window: xenith delete <id>\n" +
-    "Window ctl commands (echo to /mnt/xenith/xenith/<id>/ctl):\n" +
+    "Window ctl commands (echo to /mnt/xenith/<id>/ctl):\n" +
     "  clean - mark window as unmodified\n" +
     "  show - scroll to show current selection\n" +
     "  delete - close window forcefully\n" +
