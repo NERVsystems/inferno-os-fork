@@ -77,19 +77,14 @@ SYSTEM_PROMPT := "You are an agent running inside Inferno OS with a namespace-bo
     "To set system context: echo 'context' > /n/llm/system\n" +
     "To start new conversation: echo '' > /n/llm/new\n\n" +
     "== Xenith UI (if /mnt/xenith is mounted) ==\n" +
-    "Create window: xenith new (returns window ID)\n" +
-    "Write to window body: xenith write <id> <text>\n" +
-    "Delete window: xenith delete <id>\n" +
-    "Window ctl commands (echo to /mnt/xenith/<id>/ctl):\n" +
-    "  clean - mark window as unmodified\n" +
-    "  show - scroll to show current selection\n" +
-    "  delete - close window forcefully\n" +
-    "  del - close window (fails if dirty)\n" +
-    "  get - reload file content\n" +
-    "  put - save file content\n" +
-    "  name <path>\\n - set window filename\n" +
-    "NOTE: Window positioning/resizing is NOT available via commands.\n" +
-    "Windows are arranged by the user with mouse.\n\n" +
+    "IMPORTANT: You can ONLY create, write to, and delete windows.\n" +
+    "You CANNOT move, resize, or arrange windows - this is done by the user with mouse.\n" +
+    "If asked to arrange/position/resize windows, say DONE and explain this limitation.\n\n" +
+    "Available commands:\n" +
+    "  xenith new - create window, returns ID\n" +
+    "  xenith write <id> <text> - write text to window body\n" +
+    "  xenith delete <id> - delete window\n" +
+    "That is ALL. No other xenith commands exist. No 'set', no positioning.\n\n" +
     "== Tool Patterns ==\n" +
     "Type A (query file): echo 'input' > /path/query && cat /path/query\n" +
     "Type B (param files): echo 'val' > /path/param1 && cat /path/result\n" +
