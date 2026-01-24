@@ -108,32 +108,12 @@ check "Scroll-anywhere sets w.body.eq0" \
     "grep -A10 'scroll window body from anywhere' '$XENITH_FILE' | grep -q 'w.body.eq0'"
 
 echo ""
-echo "--- Xenith Acme-Style Variable Scroll Speed ---"
+echo "--- Xenith Scrollbar Click-Drag ---"
 echo ""
 
-# Test 11: Variable scroll speed comment exists
-check "Acme-style variable scroll comment exists" \
-    "grep -q 'Acme-style variable speed' '$XENITH_FILE'"
-
-# Test 12: Calculates position in scrollbar
-check "Calculates mouse position in scrollbar" \
-    "grep -A15 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'pos :='"
-
-# Test 13: Uses position to calculate number of lines
-check "Calculates nlines based on position (1-10 range)" \
-    "grep -A15 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'nlines :='"
-
-# Test 14: Uses typex for scrolling (variable lines via loop)
-check "Uses typex() for variable scroll" \
-    "grep -A20 'Acme-style variable speed' '$XENITH_FILE' | grep -q 't.typex(scrollkey'"
-
-# Test 15: Uses loop for variable speed
-check "Uses loop for variable scroll amount" \
-    "grep -A20 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'for.*nlines'"
-
-# Test 16: Variable scroll is inside Body scrollbar block
-check "Variable scroll integrated in Body scrollbar handling" \
-    "grep -B5 'Acme-style' '$XENITH_FILE' | grep -q 'mouse.buttons & (8|16)'"
+# Test 11: Scrollbar click-drag only triggers for button clicks, not scroll wheel
+check "Scrollbar click-drag requires button press (but)" \
+    "grep -q 't.what==Body && mouse.xy.in(t.scrollr) && but' '$XENITH_FILE'"
 
 echo ""
 echo "=== Results ==="
