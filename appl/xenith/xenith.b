@@ -605,35 +605,31 @@ mousetask()
 				barttext = t;
 				if(t.what==Body && mouse.xy.in(t.scrollr)){
 					if(but){
+						# Click-drag on scrollbar
 						w.lock('M');
 						t.eq0 = ~0;
 						scrl->scroll(t, but);
 						t.w.unlock();
-					}
-					bflush();
-					row.qlock.unlock();
-					break;
-				}
-
-# Scroll wheel on scrollbar - Acme-style variable speed
-# Near top = slow (1 line), near bottom = fast (10 lines)
-				if(t.what == Body && mouse.xy.in(t.scrollr) && (mouse.buttons & (8|16))){
-					h := t.scrollr.max.y - t.scrollr.min.y;
-					if(h > 0){
-						pos := real(mouse.xy.y - t.scrollr.min.y) / real(h);
-						nlines := 1 + int(pos * 9.0);
-						if(nlines < 1) nlines = 1;
-						if(nlines > 10) nlines = 10;
-						w.lock('M');
-						if(mouse.buttons & 8){
-							q0 := t.backnl(t.org, nlines);
-							t.setorigin(q0, 0);
-						} else {
-							q0 := t.org + framem->frcharofpt(t.frame,
-								(t.frame.r.min.x, t.frame.r.min.y + nlines * t.frame.font.height));
-							t.setorigin(q0, 0);
+					} else if(mouse.buttons & (8|16)){
+						# Scroll wheel on scrollbar - Acme-style variable speed
+						# Near top = slow (1 line), near bottom = fast (10 lines)
+						h := t.scrollr.max.y - t.scrollr.min.y;
+						if(h > 0){
+							pos := real(mouse.xy.y - t.scrollr.min.y) / real(h);
+							nlines := 1 + int(pos * 9.0);
+							if(nlines < 1) nlines = 1;
+							if(nlines > 10) nlines = 10;
+							w.lock('M');
+							if(mouse.buttons & 8){
+								q0 := t.backnl(t.org, nlines);
+								t.setorigin(q0, 0);
+							} else {
+								q0 := t.org + framem->frcharofpt(t.frame,
+									(t.frame.r.min.x, t.frame.r.min.y + nlines * t.frame.font.height));
+								t.setorigin(q0, 0);
+							}
+							w.unlock();
 						}
-						w.unlock();
 					}
 					bflush();
 					row.qlock.unlock();

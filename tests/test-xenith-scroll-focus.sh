@@ -117,23 +117,23 @@ check "Acme-style variable scroll comment exists" \
 
 # Test 12: Calculates position in scrollbar
 check "Calculates mouse position in scrollbar" \
-    "grep -A20 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'pos :='"
+    "grep -A15 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'pos :='"
 
 # Test 13: Uses position to calculate number of lines
 check "Calculates nlines based on position (1-10 range)" \
-    "grep -A20 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'nlines :='"
+    "grep -A15 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'nlines :='"
 
 # Test 14: Uses backnl for scroll up (variable lines)
 check "Uses backnl() for variable scroll up" \
-    "grep -A20 'Acme-style variable speed' '$XENITH_FILE' | grep -q 't.backnl(t.org, nlines)'"
+    "grep -A15 'Acme-style variable speed' '$XENITH_FILE' | grep -q 't.backnl(t.org, nlines)'"
 
 # Test 15: Uses frcharofpt for scroll down (variable lines)
 check "Uses frcharofpt() for variable scroll down" \
-    "grep -A20 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'frcharofpt'"
+    "grep -A15 'Acme-style variable speed' '$XENITH_FILE' | grep -q 'frcharofpt'"
 
-# Test 16: Checks mouse is in scrollbar for variable scroll
-check "Variable scroll only when mouse in scrollr" \
-    "grep -A3 'Acme-style' '$XENITH_FILE' | grep -q 'mouse.xy.in(t.scrollr)'"
+# Test 16: Variable scroll is inside Body scrollbar block
+check "Variable scroll integrated in Body scrollbar handling" \
+    "grep -B5 'Acme-style' '$XENITH_FILE' | grep -q 'mouse.buttons & (8|16)'"
 
 echo ""
 echo "=== Results ==="
