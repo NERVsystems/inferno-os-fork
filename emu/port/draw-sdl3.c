@@ -169,6 +169,47 @@ window_to_texture_coords(float win_x, float win_y, int *tex_x, int *tex_y)
 	*tex_y = y;
 }
 
+/*
+ * Get mouse button state with modifier key emulation for single-button mice.
+ * On macOS laptops without a three-button mouse:
+ *   - Option + Left Click  = Button 2 (middle click)
+ *   - Command + Left Click = Button 3 (right click)
+ * This follows Plan 9 / Acme conventions.
+ */
+static int
+get_mouse_buttons(void)
+{
+	int buttons = 0;
+	Uint32 state = SDL_GetMouseState(NULL, NULL);
+	SDL_Keymod mods = SDL_GetModState();
+
+	/* Check for physical buttons first */
+	int left = (state & SDL_BUTTON_LMASK) ? 1 : 0;
+	int middle = (state & SDL_BUTTON_MMASK) ? 1 : 0;
+	int right = (state & SDL_BUTTON_RMASK) ? 1 : 0;
+
+	/* Emulate button 2 (middle) with Option/Alt + Left Click */
+	if (left && (mods & SDL_KMOD_ALT)) {
+		buttons |= 2;  /* Button 2 */
+	}
+	/* Emulate button 3 (right) with Command/GUI + Left Click */
+	else if (left && (mods & SDL_KMOD_GUI)) {
+		buttons |= 4;  /* Button 3 */
+	}
+	/* Normal left click (no emulation) */
+	else if (left) {
+		buttons |= 1;  /* Button 1 */
+	}
+
+	/* Physical middle and right buttons always work */
+	if (middle)
+		buttons |= 2;
+	if (right)
+		buttons |= 4;
+
+	return buttons;
+}
+
 /* Forward declarations */
 static void sdl_atexit_handler(void);
 void sdl_shutdown(void);
@@ -534,14 +575,8 @@ sdl_pollevents(void)
 				window_to_texture_coords(event.motion.x, event.motion.y,
 					&mouse_x, &mouse_y);
 
-				/* Get current button state */
-				mouse_buttons = 0;
-				if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LMASK)
-					mouse_buttons |= 1;
-				if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MMASK)
-					mouse_buttons |= 2;
-				if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_RMASK)
-					mouse_buttons |= 4;
+				/* Get button state with modifier key emulation */
+				mouse_buttons = get_mouse_buttons();
 
 				mousetrack(mouse_buttons, mouse_x, mouse_y, 0);
 			}
@@ -557,14 +592,8 @@ sdl_pollevents(void)
 				window_to_texture_coords(event.button.x, event.button.y,
 					&mouse_x, &mouse_y);
 
-				/* Update button state */
-				mouse_buttons = 0;
-				if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LMASK)
-					mouse_buttons |= 1;
-				if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MMASK)
-					mouse_buttons |= 2;
-				if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_RMASK)
-					mouse_buttons |= 4;
+				/* Get button state with modifier key emulation */
+				mouse_buttons = get_mouse_buttons();
 
 				mousetrack(mouse_buttons, mouse_x, mouse_y, 0);
 			}
@@ -921,16 +950,11 @@ sdl3_mainloop(void)
 					 * This handles letterboxing offset and scaling.
 					 */
 					int x, y;
-					int buttons = 0;
 
 					window_to_texture_coords(event.button.x, event.button.y, &x, &y);
 
-					Uint32 state = SDL_GetMouseState(NULL, NULL);
-					if (state & SDL_BUTTON_LMASK) buttons |= 1;
-					if (state & SDL_BUTTON_MMASK) buttons |= 2;
-					if (state & SDL_BUTTON_RMASK) buttons |= 4;
-
-					mousetrack(buttons, x, y, 0);
+					/* Get button state with modifier key emulation */
+					mousetrack(get_mouse_buttons(), x, y, 0);
 				}
 				break;
 
