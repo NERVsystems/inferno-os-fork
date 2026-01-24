@@ -575,6 +575,13 @@ mousetask()
 					mousetext.w.unlock();
 				}
 				mousetext = t;
+				# Focus-follows-mouse: update active window/column when mouse enters
+				if(t != nil){
+					if(t.w != nil)
+						dat->activewin = t.w;
+					if(t.col != nil)
+						activecol = t.col;
+				}
 				if(t == nil) {
 					bflush();
 					row.qlock.unlock();
@@ -607,16 +614,41 @@ mousetask()
 					row.qlock.unlock();
 					break;
 				}
-				
-# TAG scroll wheel 
+
+# Scroll wheel on scrollbar - Acme-style variable speed
+# Near top = slow (1 line), near bottom = fast (10 lines)
+				if(t.what == Body && mouse.xy.in(t.scrollr) && (mouse.buttons & (8|16))){
+					h := t.scrollr.max.y - t.scrollr.min.y;
+					if(h > 0){
+						pos := real(mouse.xy.y - t.scrollr.min.y) / real(h);
+						nlines := 1 + int(pos * 9.0);
+						if(nlines < 1) nlines = 1;
+						if(nlines > 10) nlines = 10;
+						w.lock('M');
+						if(mouse.buttons & 8){
+							q0 := t.backnl(t.org, nlines);
+							t.setorigin(q0, 0);
+						} else {
+							q0 := t.org + framem->frcharofpt(t.frame,
+								(t.frame.r.min.x, t.frame.r.min.y + nlines * t.frame.font.height));
+							t.setorigin(q0, 0);
+						}
+						w.unlock();
+					}
+					bflush();
+					row.qlock.unlock();
+					break;
+				}
+
+# Scroll wheel - scroll window body from anywhere in window
 				if(w != nil && (mouse.buttons &(8|16))){
 					if(mouse.buttons & 8)
 						but = Dat->Kscrollup;
 					else
 						but = Dat->Kscrolldown;
 					w.lock('M');
-					t.eq0 = ~0;
-					t.typex(but, 0);
+					w.body.eq0 = ~0;
+					w.body.typex(but, 0);
 					w.unlock();
 					bflush();
 					row.qlock.unlock();

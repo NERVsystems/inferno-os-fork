@@ -958,6 +958,18 @@ sdl3_mainloop(void)
 				}
 				break;
 
+			case SDL_EVENT_MOUSE_WHEEL:
+				/* Scroll wheel as buttons 4 & 5 */
+				{
+					int x, y;
+					window_to_texture_coords(event.wheel.mouse_x, event.wheel.mouse_y, &x, &y);
+					if (event.wheel.y > 0)
+						mousetrack(8, x, y, 0);   /* scroll up = button 4 */
+					else if (event.wheel.y < 0)
+						mousetrack(16, x, y, 0);  /* scroll down = button 5 */
+				}
+				break;
+
 			case SDL_EVENT_TEXT_INPUT:
 				/*
 				 * Text input event - receives actual characters with modifiers applied.
