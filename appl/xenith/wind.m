@@ -52,6 +52,7 @@ Windowm : module {
 		tagexpand : int;
 		taglines : int;
 		tagtop : Draw->Rect;
+		creatormnt : int;	# Mount session ID that created this window (0 = user/Xenith)
 
 		init : fn(w : self ref Window, w0 : ref Window, r : Draw->Rect);
 		lock : fn(w : self ref Window, n : int);

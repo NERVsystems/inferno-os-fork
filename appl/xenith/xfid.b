@@ -13,6 +13,7 @@ diskm : Diskm;
 filem : Filem;
 textm : Textm;
 columnm : Columnm;
+rowm : Rowm;
 scrl : Scroll;
 look : Look;
 exec : Exec;
@@ -41,6 +42,7 @@ scrdraw : import scrl;
 Window : import windowm;
 bflush : import graph;
 Column : import columnm;
+Row : import rowm;
 row : import dat;
 FILE, QID, respond : import fsys;
 oldtag, name, offset, count, data, setcount, setdata : import styxaux;
@@ -60,6 +62,7 @@ init(mods : ref Dat->Mods)
 	diskm = mods.diskm;
 	textm = mods.textm;
 	columnm = mods.columnm;
+	rowm = mods.rowm;
 	scrl = mods.scroll;
 	look = mods.look;
 	exec = mods.exec;
@@ -194,7 +197,7 @@ loop:
 	respond(x, fc, nil);
 }
  
-Xfid.walk(nil : self ref Xfid, cw: chan of ref Window)
+Xfid.walk(x : self ref Xfid, cw: chan of ref Window)
 {
 	# fc : Smsg0;
 	w : ref Window;
@@ -204,6 +207,11 @@ Xfid.walk(nil : self ref Xfid, cw: chan of ref Window)
 	row.qlock.lock();	# tasks->procs now
 	w = utils->newwindow(nil);
 	w.settag();
+	# Track which mount session created this window
+	if(x.f != nil && x.f.mntdir != nil)
+		w.creatormnt = x.f.mntdir.id;
+	else
+		w.creatormnt = 0;
 	# w.refx.inc();
 	# x.f.w = w;
 	# x.f.qid.path = big QID(w.id, Qdir);
@@ -755,10 +763,20 @@ loop :
 			m += (q+1);
 		}else
 		if(strncmp(p, "delete", 6) == 0){	# delete for sure
+			# Protect user-created windows from programmatic deletion
+			if(x.f.mntdir != nil && w.creatormnt == 0){
+				err = "permission denied: user window";
+				break;
+			}
 			w.col.close(w, TRUE);
 			m = 6;
 		}else
 		if(strncmp(p, "del", 3) == 0){	# delete, but check dirty
+			# Protect user-created windows from programmatic deletion
+			if(x.f.mntdir != nil && w.creatormnt == 0){
+				err = "permission denied: user window";
+				break;
+			}
 			if(!w.clean(TRUE, FALSE)){
 				err = "file dirty";
 				break;
@@ -843,6 +861,94 @@ loop :
 		if(strncmp(p, "clearimage", 10) == 0){	# return to text mode
 			w.clearimage();
 			m = 10;
+		}else
+		if(strncmp(p, "growfull", 8) == 0){	# full column (hides other windows)
+			if(w.col != nil)
+				w.col.grow(w, 3, 0);
+			m = 8;
+		}else
+		if(strncmp(p, "growmax", 7) == 0){	# maximum size within column
+			if(w.col != nil)
+				w.col.grow(w, 2, 0);
+			m = 7;
+		}else
+		if(strncmp(p, "grow", 4) == 0){	# moderate growth
+			if(w.col != nil)
+				w.col.grow(w, 1, 0);
+			m = 4;
+		}else
+		if(strncmp(p, "moveto ", 7) == 0){	# move window to Y position in column
+			pp = p[7:];
+			m = 7;
+			q = utils->strchr(pp, '\n');
+			if(q < 0)
+				q = len pp;
+			if(q <= 0){
+				err = Ebadctl;
+				break;
+			}
+			ystr := pp[0:q];
+			y := int ystr;
+			if(w.col != nil){
+				w.col.close(w, FALSE);
+				w.col.add(w, nil, y);
+			}
+			m += q;
+			if(q < len pp && pp[q] == '\n')
+				m++;
+		}else
+		if(strncmp(p, "tocol ", 6) == 0){	# move to different column
+			pp = p[6:];
+			m = 6;
+			q = utils->strchr(pp, '\n');
+			if(q < 0)
+				q = len pp;
+			if(q <= 0){
+				err = Ebadctl;
+				break;
+			}
+			args := pp[0:q];
+			colstr := args;
+			yval := -1;
+			sp := utils->strchr(args, ' ');
+			if(sp > 0){
+				colstr = args[0:sp];
+				yval = int args[sp+1:];
+			}
+			colidx := int colstr;
+			if(colidx < 0 || colidx >= row.ncol){
+				err = "invalid column index";
+				break;
+			}
+			if(w.col != nil){
+				oldcol := w.col;
+				newcol := row.col[colidx];
+				if(newcol != oldcol){
+					oldcol.close(w, FALSE);
+					newcol.add(w, nil, yval);
+				}
+			}
+			m += q;
+			if(q < len pp && pp[q] == '\n')
+				m++;
+		}else
+		if(strncmp(p, "newcol", 6) == 0){	# create new column
+			xpos := -1;
+			if(len p > 7 && p[6] == ' '){
+				pp = p[7:];
+				m = 7;
+				q = utils->strchr(pp, '\n');
+				if(q < 0)
+					q = len pp;
+				if(q > 0)
+					xpos = int pp[0:q];
+				m += q;
+				if(q < len pp && pp[q] == '\n')
+					m++;
+			}else{
+				m = 6;
+			}
+			row.add(nil, xpos);
 		}else{
 			err = Ebadctl;
 			break;

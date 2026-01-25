@@ -77,13 +77,20 @@ SYSTEM_PROMPT := "You are an agent running inside Inferno OS with a namespace-bo
     "To set system context: echo 'context' > /n/llm/system\n" +
     "To start new conversation: echo '' > /n/llm/new\n\n" +
     "== Xenith UI (if /mnt/xenith is mounted) ==\n" +
-    "You can create, write to, delete, and change colors of windows.\n" +
-    "You CANNOT move, resize, or arrange windows - user does this with mouse.\n" +
-    "If asked to arrange/position/resize windows, say DONE and explain this limitation.\n\n" +
+    "You can create, write to, delete, resize, and arrange windows.\n" +
+    "NOTE: You can only delete windows YOU created. User windows are protected.\n\n" +
     "Window commands:\n" +
     "  xenith new - create window, returns ID\n" +
     "  xenith write <id> <text> - write text to window body\n" +
-    "  xenith delete <id> - delete window\n\n" +
+    "  xenith delete <id> - delete window (only if you created it)\n" +
+    "  xenith ctl <id> <command> - send control command\n\n" +
+    "Layout control (via ctl or echo to /mnt/xenith/<id>/ctl):\n" +
+    "  grow - moderate size increase\n" +
+    "  growmax - maximize within column\n" +
+    "  growfull - take full column (hides other windows)\n" +
+    "  moveto <y> - move to Y pixel position in current column\n" +
+    "  tocol <colindex> [<y>] - move to column N at optional Y position\n" +
+    "  newcol [<x>] - create new column at X position\n\n" +
     "Window colors (via /mnt/xenith/<id>/colors file):\n" +
     "  Read: cat /mnt/xenith/<id>/colors\n" +
     "  Set: echo 'tagbg #RRGGBB' > /mnt/xenith/<id>/colors\n" +
