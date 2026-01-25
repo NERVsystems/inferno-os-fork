@@ -4,7 +4,12 @@ DIRS=\
 	testing\
 
 TARG=\
+	9p_export_test.dis\
 	example_test.dis\
+	hello_test.dis\
+	sdl3_test.dis\
+	stderr_test.dis\
+	tcp_test.dis\
 	tempfile_test.dis\
 
 MODULES=

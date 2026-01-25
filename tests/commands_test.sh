@@ -4,7 +4,7 @@
 echo "Testing all utilities in dis/*.dis"
 echo "===================================="
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 FAILED=0
 PASSED=0

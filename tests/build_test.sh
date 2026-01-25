@@ -5,7 +5,7 @@
 
 set -e
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export ROOT
 
 echo "=== InferNode macOS ARM64 Build (Headless) ==="

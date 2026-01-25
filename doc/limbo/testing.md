@@ -301,3 +301,65 @@ cd appl/cmd && mk limbtest.dis
 # Build tests
 cd tests && mk
 ```
+
+## Test Directory Structure
+
+All tests live in the `tests/` directory:
+
+```
+tests/
+├── *_test.b              # Limbo unit tests (Go-style framework)
+├── *_test.sh             # Shell regression tests (C code patterns)
+├── testing/              # Framework self-tests
+└── mkfile                # Inferno mk build file
+```
+
+### Limbo Tests (`*_test.b`)
+
+| Test | Description |
+|------|-------------|
+| `example_test.b` | Framework demonstration |
+| `hello_test.b` | Basic module loading, sys->print |
+| `stderr_test.b` | STDOUT/STDERR file descriptors |
+| `tcp_test.b` | TCP/IP stack (dial, read, write) |
+| `9p_export_test.b` | 9P announce/listen |
+| `sdl3_test.b` | Draw module, Display.allocate |
+| `tempfile_test.b` | Temp file slot management |
+
+### Shell Tests (`*_test.sh`)
+
+| Test | Description |
+|------|-------------|
+| `sdl3_rendering_test.sh` | Verifies batched rendering in C code |
+| `modifier_mouse_emulation_test.sh` | Verifies modifier key handling in C |
+| `xenith_scroll_focus_test.sh` | Verifies scroll/focus implementation |
+| `xenith_build_test.sh` | Verifies xenith.dis builds correctly |
+| `xenith_window_test.sh` | Xenith window manipulation (requires Xenith) |
+| `xenith_colors_test.sh` | Per-window colors (requires Xenith) |
+| `build_test.sh` | Headless build verification |
+| `commands_test.sh` | Tests all compiled utilities |
+| `network_test.sh` | TCP/IP integration tests |
+| `tempfile_slots_test.sh` | Temp file slot reclamation |
+
+## Running All Tests
+
+```sh
+# Run all Limbo tests
+./emu/MacOSX/o.emu -r . limbtest -v tests/...
+
+# Run all shell tests (from project root)
+for test in tests/*_test.sh; do
+    echo "=== $test ==="
+    sh "$test"
+done
+
+# Run a specific shell test
+tests/sdl3_rendering_test.sh
+```
+
+## Adding New Tests
+
+1. Create `tests/myfeature_test.b` or `tests/myfeature_test.sh`
+2. Follow naming convention: `*_test.b` or `*_test.sh`
+3. For Limbo tests, add to `tests/mkfile` TARG list
+4. Shell tests run standalone - no build step needed

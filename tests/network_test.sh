@@ -6,7 +6,7 @@ echo "TCP/IP Network Stack Tests"
 echo "=========================================="
 echo ""
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 echo "Test 1: Check network devices exist"
 ./emu/MacOSX/o.emu -r. <<'EOF' 2>&1 | grep -v DEBUG | head -20
