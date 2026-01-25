@@ -1,0 +1,20 @@
+<$ROOT/mkconfig
+
+DIRS=\
+	testing\
+
+TARG=\
+	example_test.dis\
+	tempfile_test.dis\
+
+MODULES=
+
+SYSMODULES=\
+	draw.m\
+	sys.m\
+	testing.m\
+
+DISBIN=$ROOT/dis/tests
+
+<$ROOT/mkfiles/mkdis
+<$ROOT/mkfiles/mksubdirs

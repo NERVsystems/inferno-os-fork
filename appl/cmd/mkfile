@@ -83,6 +83,7 @@ TARG=\
 	js.dis\
 	kill.dis\
 	ktrans.dis\
+	limbtest.dis\
 	listen.dis\
 	localcron.dis\
 	lockfs.dis\
@@ -223,6 +224,7 @@ SYSMODULES=\
 	sys.m\
 	sys.m \
 	tables.m\
+	testing.m\
 	tk.m\
 	url.m\
 	vac.m\
