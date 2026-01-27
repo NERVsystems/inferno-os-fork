@@ -168,6 +168,7 @@ TARG=\
 	vacput.dis\
 	wav2iaf.dis\
 	wc.dis\
+	web9p.dis\
 	webgrab.dis\
 	wmexport.dis\
 	wmimport.dis\
@@ -229,6 +230,7 @@ SYSMODULES=\
 	tk.m\
 	url.m\
 	vac.m\
+	web.m\
 	venti.m\
 	wmclient.m\
 	wmlib.m\

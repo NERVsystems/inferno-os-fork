@@ -62,10 +62,19 @@ cleanup_windows := 0;
 # Track windows created during execution for cleanup
 created_windows: list of int;
 
+# Helper function to count list length
+listlen(l: list of int): int
+{
+    count := 0;
+    for(; l != nil; l = tl l)
+        count++;
+    return count;
+}
+
 # Safety limits
-MAX_ITERATIONS := 5;       # Maximum iterations before forced stop
-MAX_ERRORS := 3;           # Maximum consecutive errors before stop
-MAX_HISTORY := 10;         # Maximum actions to remember
+MAX_ITERATIONS := 50;      # Maximum iterations before forced stop (one command per iteration)
+MAX_ERRORS := 5;           # Maximum consecutive errors before stop
+MAX_HISTORY := 20;         # Maximum actions to remember
 
 # Action record for history
 Action: adt {
@@ -127,12 +136,24 @@ SYSTEM_PROMPT := "You are an agent running inside Inferno OS with a namespace-bo
     "Type A (query file): echo 'input' > /path/query && cat /path/query\n" +
     "Type B (param files): echo 'val' > /path/param1 && cat /path/result\n" +
     "Use 'ls' to discover tool structure.\n\n" +
+    "== Web Access (if /n/web is mounted) ==\n" +
+    "Fetch web content:\n" +
+    "  echo 'url' > /n/web/url && cat /n/web/result\n" +
+    "POST request:\n" +
+    "  echo 'url' > /n/web/url\n" +
+    "  echo 'POST' > /n/web/method\n" +
+    "  echo 'body' > /n/web/body\n" +
+    "  cat /n/web/result\n" +
+    "Check status: cat /n/web/status\n\n" +
     "== Available Commands ==\n" +
     "Built-in: echo, cat, ls, xenith\n" +
     "Shell commands: grep, sed, edit, date, wc, sort, uniq, head, tail\n" +
     "Only use commands you know exist. Do NOT invent commands.\n\n" +
     "== Instructions ==\n" +
-    "Respond with ONLY shell commands. No explanations or commentary.\n" +
+    "You are an iterative agent. Output ONE command at a time, then STOP and wait.\n" +
+    "After each command, you will see the result before deciding your next action.\n" +
+    "Do NOT plan multiple steps ahead - execute, observe, then decide.\n" +
+    "Do NOT guess IDs or assume outcomes - wait for actual results.\n" +
     "If a task cannot be done with available commands, say DONE and explain why.\n" +
     "When task is complete, respond with 'DONE' on its own line.";
 
@@ -500,6 +521,121 @@ xenith_cleanup()
     }
 }
 
+# Check if path is a xenith window body
+isxenithbody(path: string): int
+{
+    # Pattern: /mnt/xenith/<id>/body
+    if(len path < 17)  # minimum: /mnt/xenith/1/body
+        return 0;
+    if(len path < len XENITH_BASE || path[0:len XENITH_BASE] != XENITH_BASE)
+        return 0;
+    if(len path > 5 && path[len path - 5:] == "/body")
+        return 1;
+    return 0;
+}
+
+# Extract window ID from xenith path
+getwinid(path: string): int
+{
+    # Pattern: /mnt/xenith/<id>/...
+    if(len path <= len XENITH_BASE + 1)
+        return -1;
+    rest := path[len XENITH_BASE + 1:];  # skip "/mnt/xenith/"
+    # Find end of ID (next /)
+    idend := 0;
+    for(; idend < len rest; idend++) {
+        if(rest[idend] == '/')
+            break;
+    }
+    if(idend == 0)
+        return -1;
+    return int rest[0:idend];
+}
+
+# Check if window is a system window (should not be read by agent)
+issystemwindow(winid: int): int
+{
+    # Read the window tag
+    tagpath := sys->sprint("%s/%d/tag", XENITH_BASE, winid);
+    fd := sys->open(tagpath, Sys->OREAD);
+    if(fd == nil)
+        return 0;  # Can't read tag, allow access
+
+    buf := array[512] of byte;
+    n := sys->read(fd, buf, len buf);
+    if(n <= 0)
+        return 0;
+
+    tag := string buf[0:n];
+
+    # System windows start with + (like +Errors, +Scratch)
+    if(len tag > 0 && tag[0] == '+')
+        return 1;
+
+    return 0;
+}
+
+# Resolve window ID reference: $ = last, $1 = first created, $2 = second, etc.
+# Returns -1 if reference is invalid
+resolvewinref(winref: string): int
+{
+    if(winref == "$" || winref == "$0") {
+        # Last created window
+        if(created_windows == nil)
+            return -1;
+        return hd created_windows;  # List is most-recent-first
+    }
+
+    if(len winref > 1 && winref[0] == '$') {
+        # $N = Nth created window (1-indexed)
+        n := int winref[1:];
+        if(n < 1)
+            return -1;
+        # created_windows is most-recent-first, so we need to reverse index
+        count := listlen(created_windows);
+        if(n > count)
+            return -1;
+        # Walk to the (count - n)th element (0-indexed from head)
+        idx := count - n;
+        w := created_windows;
+        for(i := 0; i < idx && w != nil; i++)
+            w = tl w;
+        if(w == nil)
+            return -1;
+        return hd w;
+    }
+
+    # Not a reference, try to parse as integer
+    return int winref;
+}
+
+# Expand window references in a path like /mnt/xenith/$1/body
+expandwinrefs(path: string): string
+{
+    # Look for $ followed by digits or just $
+    result := "";
+    i := 0;
+    while(i < len path) {
+        if(path[i] == '$') {
+            # Find end of reference
+            j := i + 1;
+            while(j < len path && path[j] >= '0' && path[j] <= '9')
+                j++;
+            winref := path[i:j];
+            winid := resolvewinref(winref);
+            if(winid >= 0)
+                result += string winid;
+            else
+                result += winref;  # Keep original if invalid
+            i = j;
+        } else {
+            result += path[i:i+1];
+            i++;
+        }
+    }
+    return result;
+}
+
 # ============================================================
 # Shell Command Execution
 # ============================================================
@@ -589,73 +725,68 @@ runcmd(prog: DisModule, argv: list of string, outfd: ref Sys->FD, result: chan o
     }
 }
 
-# Run the agent loop with safety limits
+# Run the agent loop - Claude Code pattern
+# llm9p maintains conversation context, we just query and execute
 runagent(task: string)
 {
     iterations := 0;
     consecutive_errors := 0;
-    history: list of ref Action;  # Action history (most recent first)
-    facts: list of string;        # Learned facts
 
-    sys->print("\n=== Agent v3 Starting (max %d iterations, with memory) ===\n", MAX_ITERATIONS);
+    sys->print("\n=== Agent v5 Starting (max %d steps) ===\n", MAX_ITERATIONS);
+    sys->print("Using llm9p context for conversation memory\n");
+
+    # First prompt includes namespace and task
+    prompt := buildprompt(task);
+    sys->print("Initial prompt:\n%s\n", prompt);
 
     while(iterations < MAX_ITERATIONS && consecutive_errors < MAX_ERRORS) {
         iterations++;
-        sys->print("\n=== Iteration %d/%d ===\n", iterations, MAX_ITERATIONS);
+        sys->print("\n=== Step %d/%d ===\n", iterations, MAX_ITERATIONS);
 
-        # Build prompt with namespace and task
-        prompt := buildprompt(task);
-
-        # Always include summary if we have history
-        if(history != nil || facts != nil) {
-            summary := buildsummary(history, facts);
-            prompt += "\n\n" + summary;
-        }
-
-        if(iterations == 1)
-            sys->print("Prompt:\n%s\n", prompt);
-
+        # Query LLM - llm9p maintains conversation history
         response := query(prompt);
         if(response == "") {
             sys->fprint(sys->fildes(2), "agent: no response from LLM (error %d/%d)\n",
                 consecutive_errors+1, MAX_ERRORS);
             consecutive_errors++;
-            history = addaction(history, "query", LLM_ASK, "ERR", "empty response");
+            prompt = "ERROR: empty response. Please try again.";
             continue;
         }
 
         sys->print("\n=== LLM Response ===\n%s\n", response);
 
-        # Execute commands and collect actions
-        sys->print("\n=== Executing Commands ===\n");
-        (nerrs, actions, newfacts) := executecommands_v2(response);
+        # Check for completion BEFORE executing
+        if(hascompletion(response)) {
+            sys->print("\n=== Task Complete ===\n");
+            break;
+        }
 
-        # Add actions to history
-        for(; actions != nil; actions = tl actions)
-            history = hd actions :: history;
+        # Execute ONLY the first command
+        sys->print("\n=== Executing Command ===\n");
+        (nerr, action, nil) := executefirstcommand(response);
 
-        # Add any new facts
-        for(; newfacts != nil; newfacts = tl newfacts)
-            facts = hd newfacts :: facts;
-
-        # Trim history to MAX_HISTORY
-        history = trimhistory(history, MAX_HISTORY);
-
-        if(nerrs > 0) {
-            consecutive_errors += nerrs;
-            sys->print("Errors this iteration: %d (consecutive: %d/%d)\n",
-                nerrs, consecutive_errors, MAX_ERRORS);
-        } else {
-            consecutive_errors = 0;  # Reset consecutive counter, but keep history
-            if(hascompletion(response)) {
-                sys->print("\n=== Task Complete ===\n");
-                break;
+        # Build next prompt from result - llm9p remembers the conversation
+        if(action != nil) {
+            if(action.outcome == "OK") {
+                prompt = "Result: " + action.detail;
+            } else {
+                prompt = "ERROR: " + action.detail;
             }
+            sys->print("Next prompt: %s\n", prompt);
+        } else {
+            prompt = "No command found in your response. Output ONE command.";
+        }
+
+        if(nerr > 0) {
+            consecutive_errors++;
+            sys->print("Error (consecutive: %d/%d)\n", consecutive_errors, MAX_ERRORS);
+        } else {
+            consecutive_errors = 0;
         }
     }
 
     if(iterations >= MAX_ITERATIONS)
-        sys->print("\n=== Safety Limit Reached (%d iterations) ===\n", MAX_ITERATIONS);
+        sys->print("\n=== Safety Limit Reached (%d steps) ===\n", MAX_ITERATIONS);
     if(consecutive_errors >= MAX_ERRORS)
         sys->print("\n=== Too Many Errors (%d consecutive) ===\n", consecutive_errors);
 
@@ -780,7 +911,55 @@ hascompletion(response: string): int
     return 1;
 }
 
-# Execute shell commands from the LLM response
+# Execute ONLY THE FIRST command from the LLM response
+# This is the Claude Code pattern: execute one, observe, decide next
+# Returns (error_count, action, fact)
+executefirstcommand(response: string): (int, ref Action, string)
+{
+    lines := splitlines(response);
+    for(; lines != nil; lines = tl lines) {
+        line := hd lines;
+        line = trim(line);
+
+        # Skip empty lines and comments
+        if(line == "" || line[0] == '#')
+            continue;
+
+        # Skip markdown code block markers
+        if(len line >= 3 && line[0:3] == "```")
+            continue;
+
+        # Skip "DONE" completion marker
+        if(line == "DONE" || line == "done")
+            continue;
+
+        # Skip lines that look like explanatory text (not commands)
+        if(isexplanation(line))
+            continue;
+
+        # Found a command line - execute just the first command
+        # (if there are && chains, only do the first part)
+        cmds := splitand(line);
+        if(cmds == nil)
+            continue;
+
+        cmd := trim(hd cmds);
+        if(cmd == "")
+            continue;
+
+        # Execute this one command and return immediately
+        (ok, path, detail, fact) := execcmd_v2(cmd);
+        if(ok < 0) {
+            return (1, ref Action(getcmdtype(cmd), path, "ERR", detail), fact);
+        }
+        return (0, ref Action(getcmdtype(cmd), path, "OK", detail), fact);
+    }
+
+    # No command found
+    return (0, nil, "");
+}
+
+# Execute shell commands from the LLM response (batch mode - deprecated)
 # Returns (error_count, actions, facts)
 executecommands_v2(response: string): (int, list of ref Action, list of string)
 {
@@ -995,9 +1174,11 @@ execxenith_v2(cmd: string): (int, string, string, string)
 
     "write" =>
         if(len args < 2) {
-            return (-1, "xenith/write", "usage: xenith write <id> <text>", "");
+            return (-1, "xenith/write", "usage: xenith write <id|$|$N> <text>", "");
         }
-        winid := int (hd args);
+        winid := resolvewinref(hd args);
+        if(winid < 0)
+            return (-1, "xenith/write", "invalid window reference: " + hd args, "");
         args = tl args;
         # Join remaining args as text
         text := "";
@@ -1014,18 +1195,22 @@ execxenith_v2(cmd: string): (int, string, string, string)
 
     "delete" =>
         if(args == nil) {
-            return (-1, "xenith/delete", "usage: xenith delete <id>", "");
+            return (-1, "xenith/delete", "usage: xenith delete <id|$|$N>", "");
         }
-        winid := int (hd args);
+        winid := resolvewinref(hd args);
+        if(winid < 0)
+            return (-1, "xenith/delete", "invalid window reference: " + hd args, "");
         if(xenith_delete(winid) < 0)
             return (-1, sys->sprint("xenith/%d/delete", winid), "delete failed", "");
         return (0, sys->sprint("xenith/%d/delete", winid), "deleted", "");
 
     "image" =>
         if(len args < 2) {
-            return (-1, "xenith/image", "usage: xenith image <id> <path>", "");
+            return (-1, "xenith/image", "usage: xenith image <id|$|$N> <path>", "");
         }
-        winid := int (hd args);
+        winid := resolvewinref(hd args);
+        if(winid < 0)
+            return (-1, "xenith/image", "invalid window reference: " + hd args, "");
         imgpath := hd (tl args);
         if(xenith_image(winid, imgpath) < 0)
             return (-1, sys->sprint("xenith/%d/image", winid), "image display failed", "");
@@ -1033,9 +1218,11 @@ execxenith_v2(cmd: string): (int, string, string, string)
 
     "ctl" =>
         if(len args < 2) {
-            return (-1, "xenith/ctl", "usage: xenith ctl <id> <command>", "");
+            return (-1, "xenith/ctl", "usage: xenith ctl <id|$|$N> <command>", "");
         }
-        winid := int (hd args);
+        winid := resolvewinref(hd args);
+        if(winid < 0)
+            return (-1, "xenith/ctl", "invalid window reference: " + hd args, "");
         args = tl args;
         ctlcmd := "";
         for(; args != nil; args = tl args) {
@@ -1188,6 +1375,9 @@ exececho_v2(cmd: string): (int, string, string, string)
         file = file[1:];
     file = trim(file);
 
+    # Expand window references like $, $1, $2 in path
+    file = expandwinrefs(file);
+
     sys->print("  Writing '%s' to %s\n", data, file);
 
     # Write to file
@@ -1215,7 +1405,20 @@ execcat_v2(file: string): (int, string, string, string)
 {
     file = trim(file);
 
+    # Expand window references like $, $1, $2 in path
+    file = expandwinrefs(file);
+
     sys->print("Exec: cat %s\n", file);
+
+    # Check if this is a xenith window body - if so, check for system windows
+    if(isxenithbody(file)) {
+        winid := getwinid(file);
+        if(winid >= 0 && issystemwindow(winid)) {
+            errmsg := "cannot read system window";
+            sys->fprint(sys->fildes(2), "  Skipped: %s\n", errmsg);
+            return (-1, file, errmsg, "");
+        }
+    }
 
     fd := sys->open(file, Sys->OREAD);
     if(fd == nil) {
