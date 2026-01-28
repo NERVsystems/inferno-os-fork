@@ -616,17 +616,21 @@ sdl_pollevents(void)
 			 * combinations (e.g., Option+t → †) properly.
 			 * event.text.text is a UTF-8 string.
 			 *
-			 * When Alt/Option is held, we skip TEXT_INPUT to allow Plan 9
-			 * style composition (Alt starts compose mode, then type sequence
-			 * like "dd" for †). The Alt key itself sends Latin to start
-			 * composition mode in gkbdputc().
+			 * macOS Option+key composition is handled here - the OS composes
+			 * the character and sends it via TEXT_INPUT.
+			 *
+			 * Plan 9 composition is separate: Alt release sends Latin to
+			 * enter compose mode, then regular keypresses compose.
+			 *
+			 * Skip control characters (< 0x20) - those are handled in KEY_DOWN
+			 * via Ctrl+letter detection.
 			 */
 			{
-				SDL_Keymod mods = SDL_GetModState();
-				if (mods & SDL_KMOD_ALT)
-					break;  /* Skip - let Plan 9 composition handle it */
-
 				const unsigned char *text = (const unsigned char *)event.text.text;
+
+				/* Skip control characters - handled by Ctrl+letter in KEY_DOWN */
+				if (text[0] < 0x20 && text[0] != '\t')
+					break;
 				while (*text) {
 					int codepoint;
 					int bytes;
@@ -679,61 +683,31 @@ sdl_pollevents(void)
 		case SDL_EVENT_KEY_DOWN:
 			{
 				int key = 0;
-				SDL_Keymod mods = SDL_GetModState();
+				/*
+				 * Use event.key.mod (modifier state at event time)
+				 * instead of SDL_GetModState() (current state).
+				 */
+				SDL_Keymod mods = event.key.mod;
+				/*
+				 * Use the virtual keycode (event.key.key), not scancode.
+				 * Scancodes are physical positions and vary by keyboard.
+				 * Keycodes are logical keys: SDLK_a='a'=97, SDLK_h='h'=104, etc.
+				 */
+				SDL_Keycode kc = event.key.key;
 
 				/*
 				 * Handle Ctrl+letter -> control character (^A=1, ^H=8, etc.)
 				 * These don't generate TEXT_INPUT events, so handle here.
+				 * Use lowercase keycode range ('a' to 'z').
 				 */
-				if ((mods & SDL_KMOD_CTRL) &&
-				    event.key.scancode >= SDL_SCANCODE_A &&
-				    event.key.scancode <= SDL_SCANCODE_Z) {
-					key = (event.key.scancode - SDL_SCANCODE_A) + 1;
-				}
-
-				/*
-				 * Handle Alt+key for Plan 9 latin1 composition.
-				 * Alt sends Latin to start compose mode, then subsequent
-				 * keys are collected. We pass raw ASCII here since
-				 * TEXT_INPUT is skipped when Alt is held.
-				 */
-				if ((mods & SDL_KMOD_ALT) && key == 0) {
-					if (event.key.scancode >= SDL_SCANCODE_A &&
-					    event.key.scancode <= SDL_SCANCODE_Z) {
-						/* Letters: send lowercase */
-						key = 'a' + (event.key.scancode - SDL_SCANCODE_A);
-						if (mods & SDL_KMOD_SHIFT)
-							key = 'A' + (event.key.scancode - SDL_SCANCODE_A);
-					} else if (event.key.scancode >= SDL_SCANCODE_1 &&
-					           event.key.scancode <= SDL_SCANCODE_0) {
-						/* Numbers 1-9, 0 */
-						if (event.key.scancode == SDL_SCANCODE_0)
-							key = '0';
-						else
-							key = '1' + (event.key.scancode - SDL_SCANCODE_1);
-					} else {
-						/* Common punctuation for composition sequences */
-						switch (event.key.scancode) {
-						case SDL_SCANCODE_MINUS:      key = '-'; break;
-						case SDL_SCANCODE_EQUALS:     key = '='; break;
-						case SDL_SCANCODE_LEFTBRACKET:  key = '['; break;
-						case SDL_SCANCODE_RIGHTBRACKET: key = ']'; break;
-						case SDL_SCANCODE_SEMICOLON:  key = ';'; break;
-						case SDL_SCANCODE_APOSTROPHE: key = '\''; break;
-						case SDL_SCANCODE_GRAVE:      key = '`'; break;
-						case SDL_SCANCODE_COMMA:      key = ','; break;
-						case SDL_SCANCODE_PERIOD:     key = '.'; break;
-						case SDL_SCANCODE_SLASH:      key = '/'; break;
-						case SDL_SCANCODE_BACKSLASH:  key = '\\'; break;
-						case SDL_SCANCODE_SPACE:      key = ' '; break;
-						default: break;
-						}
-					}
+				if ((mods & SDL_KMOD_CTRL) && kc >= 'a' && kc <= 'z') {
+					key = kc - 'a' + 1;  /* 'a'->1, 'h'->8, etc. */
 				}
 
 				/*
 				 * Handle special/non-printable keys only.
 				 * Printable characters come via SDL_EVENT_TEXT_INPUT.
+				 * macOS Option+key composition also uses TEXT_INPUT.
 				 */
 				if (key == 0)
 				switch (event.key.scancode) {
@@ -752,8 +726,6 @@ sdl_pollevents(void)
 				case SDL_SCANCODE_PAGEUP:   key = Pgup; break;
 				case SDL_SCANCODE_PAGEDOWN: key = Pgdown; break;
 				case SDL_SCANCODE_INSERT:   key = Ins; break;
-				case SDL_SCANCODE_LALT:
-				case SDL_SCANCODE_RALT:     key = Latin; break;
 				case SDL_SCANCODE_F1:       key = KF|1; break;
 				case SDL_SCANCODE_F2:       key = KF|2; break;
 				case SDL_SCANCODE_F3:       key = KF|3; break;
@@ -772,6 +744,21 @@ sdl_pollevents(void)
 
 				if (key != 0)
 					gkbdputc(gkbdq, key);
+			}
+			break;
+
+		case SDL_EVENT_KEY_UP:
+			/*
+			 * Plan 9 latin1 composition: Alt/Option release sends Latin
+			 * to enter compose mode. User then types two characters
+			 * (without Alt held) to produce a composed glyph.
+			 *
+			 * This is separate from macOS composition where you HOLD
+			 * Option and press a key (handled via TEXT_INPUT).
+			 */
+			if (event.key.scancode == SDL_SCANCODE_LALT ||
+			    event.key.scancode == SDL_SCANCODE_RALT) {
+				gkbdputc(gkbdq, Latin);
 			}
 			break;
 
@@ -1069,16 +1056,70 @@ sdl3_mainloop(void)
 			case SDL_EVENT_TEXT_INPUT:
 				/*
 				 * Text input event - receives actual characters with modifiers applied.
-				 * This handles shift, caps lock, keyboard layout (Dvorak, etc.) properly.
+				 * This handles shift, caps lock, keyboard layout, and Option+key
+				 * combinations (e.g., Option+t → †) properly.
+				 * event.text.text is a UTF-8 string.
+				 *
+				 * macOS Option+key composition is handled here - the OS composes
+				 * the character and sends it via TEXT_INPUT.
+				 *
+				 * Plan 9 composition is separate: Alt release sends Latin to
+				 * enter compose mode, then regular keypresses compose.
+				 *
+				 * Skip control characters (< 0x20) - those are handled in KEY_DOWN
+				 * via Ctrl+letter detection.
 				 */
 				{
-					const char *text = event.text.text;
+					const unsigned char *text = (const unsigned char *)event.text.text;
+
+					/* Skip control characters - handled by Ctrl+letter in KEY_DOWN */
+					if (text[0] < 0x20 && text[0] != '\t')
+						break;
 					while (*text) {
-						unsigned char c = (unsigned char)*text;
-						if (c < 128) {
-							gkbdputc(gkbdq, c);
+						int codepoint;
+						int bytes;
+
+						/* Decode UTF-8 to Unicode codepoint */
+						if ((*text & 0x80) == 0) {
+							/* 1-byte ASCII: 0xxxxxxx */
+							codepoint = *text;
+							bytes = 1;
+						} else if ((*text & 0xE0) == 0xC0) {
+							/* 2-byte: 110xxxxx 10xxxxxx */
+							if ((text[1] & 0xC0) != 0x80)
+								goto skip_mainloop;
+							codepoint = ((*text & 0x1F) << 6) |
+							            (text[1] & 0x3F);
+							bytes = 2;
+						} else if ((*text & 0xF0) == 0xE0) {
+							/* 3-byte: 1110xxxx 10xxxxxx 10xxxxxx */
+							if ((text[1] & 0xC0) != 0x80 ||
+							    (text[2] & 0xC0) != 0x80)
+								goto skip_mainloop;
+							codepoint = ((*text & 0x0F) << 12) |
+							            ((text[1] & 0x3F) << 6) |
+							            (text[2] & 0x3F);
+							bytes = 3;
+						} else if ((*text & 0xF8) == 0xF0) {
+							/* 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
+							if ((text[1] & 0xC0) != 0x80 ||
+							    (text[2] & 0xC0) != 0x80 ||
+							    (text[3] & 0xC0) != 0x80)
+								goto skip_mainloop;
+							codepoint = ((*text & 0x07) << 18) |
+							            ((text[1] & 0x3F) << 12) |
+							            ((text[2] & 0x3F) << 6) |
+							            (text[3] & 0x3F);
+							bytes = 4;
+						} else {
+						skip_mainloop:
+							/* Invalid UTF-8, skip byte */
+							text++;
+							continue;
 						}
-						text++;
+
+						gkbdputc(gkbdq, codepoint);
+						text += bytes;
 					}
 				}
 				break;
@@ -1087,14 +1128,39 @@ sdl3_mainloop(void)
 				{
 					int key = 0;
 					/*
+					 * Use event.key.mod (modifier state at event time)
+					 * instead of SDL_GetModState() (current state).
+					 */
+					SDL_Keymod mods = event.key.mod;
+					/*
+					 * Use the virtual keycode (event.key.key), not scancode.
+					 * Scancodes are physical positions and vary by keyboard.
+					 * Keycodes are logical keys: SDLK_a='a'=97, SDLK_h='h'=104, etc.
+					 */
+					SDL_Keycode kc = event.key.key;
+
+					/*
+					 * Handle Ctrl+letter -> control character (^A=1, ^H=8, etc.)
+					 * These don't generate TEXT_INPUT events, so handle here.
+					 * Use lowercase keycode range ('a' to 'z').
+					 */
+					if ((mods & SDL_KMOD_CTRL) && kc >= 'a' && kc <= 'z') {
+						key = kc - 'a' + 1;  /* 'a'->1, 'h'->8, etc. */
+					}
+
+					/*
 					 * Handle special/non-printable keys only.
 					 * Printable characters come via SDL_EVENT_TEXT_INPUT.
+					 * macOS Option+key composition also uses TEXT_INPUT.
 					 */
+					if (key == 0)
 					switch (event.key.scancode) {
 					case SDL_SCANCODE_ESCAPE:   key = 27; break;
 					case SDL_SCANCODE_RETURN:   key = '\n'; break;
-					case SDL_SCANCODE_BACKSPACE: key = '\b'; break;
+					case SDL_SCANCODE_KP_ENTER: key = '\n'; break;
 					case SDL_SCANCODE_TAB:      key = '\t'; break;
+					case SDL_SCANCODE_BACKSPACE: key = '\b'; break;
+					case SDL_SCANCODE_DELETE:   key = 0x7F; break;
 					case SDL_SCANCODE_UP:       key = Up; break;
 					case SDL_SCANCODE_DOWN:     key = Down; break;
 					case SDL_SCANCODE_LEFT:     key = Left; break;
@@ -1104,7 +1170,6 @@ sdl3_mainloop(void)
 					case SDL_SCANCODE_PAGEUP:   key = Pgup; break;
 					case SDL_SCANCODE_PAGEDOWN: key = Pgdown; break;
 					case SDL_SCANCODE_INSERT:   key = Ins; break;
-					case SDL_SCANCODE_DELETE:   key = 0x7F; break;
 					case SDL_SCANCODE_F1:       key = KF|1; break;
 					case SDL_SCANCODE_F2:       key = KF|2; break;
 					case SDL_SCANCODE_F3:       key = KF|3; break;
@@ -1123,6 +1188,21 @@ sdl3_mainloop(void)
 
 					if (key != 0)
 						gkbdputc(gkbdq, key);
+				}
+				break;
+
+			case SDL_EVENT_KEY_UP:
+				/*
+				 * Plan 9 latin1 composition: Alt/Option release sends Latin
+				 * to enter compose mode. User then types two characters
+				 * (without Alt held) to produce a composed glyph.
+				 *
+				 * This is separate from macOS composition where you HOLD
+				 * Option and press a key (handled via TEXT_INPUT).
+				 */
+				if (event.key.scancode == SDL_SCANCODE_LALT ||
+				    event.key.scancode == SDL_SCANCODE_RALT) {
+					gkbdputc(gkbdq, Latin);
 				}
 				break;
 			}
