@@ -615,8 +615,17 @@ sdl_pollevents(void)
 			 * This handles shift, caps lock, keyboard layout, and Option+key
 			 * combinations (e.g., Option+t → †) properly.
 			 * event.text.text is a UTF-8 string.
+			 *
+			 * When Alt/Option is held, we skip TEXT_INPUT to allow Plan 9
+			 * style composition (Alt starts compose mode, then type sequence
+			 * like "dd" for †). The Alt key itself sends Latin to start
+			 * composition mode in gkbdputc().
 			 */
 			{
+				SDL_Keymod mods = SDL_GetModState();
+				if (mods & SDL_KMOD_ALT)
+					break;  /* Skip - let Plan 9 composition handle it */
+
 				const unsigned char *text = (const unsigned char *)event.text.text;
 				while (*text) {
 					int codepoint;
@@ -683,6 +692,46 @@ sdl_pollevents(void)
 				}
 
 				/*
+				 * Handle Alt+key for Plan 9 latin1 composition.
+				 * Alt sends Latin to start compose mode, then subsequent
+				 * keys are collected. We pass raw ASCII here since
+				 * TEXT_INPUT is skipped when Alt is held.
+				 */
+				if ((mods & SDL_KMOD_ALT) && key == 0) {
+					if (event.key.scancode >= SDL_SCANCODE_A &&
+					    event.key.scancode <= SDL_SCANCODE_Z) {
+						/* Letters: send lowercase */
+						key = 'a' + (event.key.scancode - SDL_SCANCODE_A);
+						if (mods & SDL_KMOD_SHIFT)
+							key = 'A' + (event.key.scancode - SDL_SCANCODE_A);
+					} else if (event.key.scancode >= SDL_SCANCODE_1 &&
+					           event.key.scancode <= SDL_SCANCODE_0) {
+						/* Numbers 1-9, 0 */
+						if (event.key.scancode == SDL_SCANCODE_0)
+							key = '0';
+						else
+							key = '1' + (event.key.scancode - SDL_SCANCODE_1);
+					} else {
+						/* Common punctuation for composition sequences */
+						switch (event.key.scancode) {
+						case SDL_SCANCODE_MINUS:      key = '-'; break;
+						case SDL_SCANCODE_EQUALS:     key = '='; break;
+						case SDL_SCANCODE_LEFTBRACKET:  key = '['; break;
+						case SDL_SCANCODE_RIGHTBRACKET: key = ']'; break;
+						case SDL_SCANCODE_SEMICOLON:  key = ';'; break;
+						case SDL_SCANCODE_APOSTROPHE: key = '\''; break;
+						case SDL_SCANCODE_GRAVE:      key = '`'; break;
+						case SDL_SCANCODE_COMMA:      key = ','; break;
+						case SDL_SCANCODE_PERIOD:     key = '.'; break;
+						case SDL_SCANCODE_SLASH:      key = '/'; break;
+						case SDL_SCANCODE_BACKSLASH:  key = '\\'; break;
+						case SDL_SCANCODE_SPACE:      key = ' '; break;
+						default: break;
+						}
+					}
+				}
+
+				/*
 				 * Handle special/non-printable keys only.
 				 * Printable characters come via SDL_EVENT_TEXT_INPUT.
 				 */
@@ -703,6 +752,8 @@ sdl_pollevents(void)
 				case SDL_SCANCODE_PAGEUP:   key = Pgup; break;
 				case SDL_SCANCODE_PAGEDOWN: key = Pgdown; break;
 				case SDL_SCANCODE_INSERT:   key = Ins; break;
+				case SDL_SCANCODE_LALT:
+				case SDL_SCANCODE_RALT:     key = Latin; break;
 				case SDL_SCANCODE_F1:       key = KF|1; break;
 				case SDL_SCANCODE_F2:       key = KF|2; break;
 				case SDL_SCANCODE_F3:       key = KF|3; break;
