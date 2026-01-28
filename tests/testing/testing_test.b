@@ -22,10 +22,13 @@ passed := 0;
 failed := 0;
 skipped := 0;
 
+# Source file path for clickable error addresses
+SRCFILE: con "/tests/testing/testing_test.b";
+
 # Helper to run a test and track results
 run(name: string, testfn: ref fn(t: ref T))
 {
-	t := testing->newT(name);
+	t := testing->newTsrc(name, SRCFILE);
 	{
 		testfn(t);
 	} exception {
@@ -56,7 +59,7 @@ testAssertFalse(t: ref T)
 {
 	# This test verifies that a failed assertion marks the test as failed
 	# We'll use a nested T to verify this behavior without affecting our test
-	inner := ref T("inner", 0, 0, nil, 0);
+	inner := ref T("inner", "", 0, 0, nil, 0);
 	inner.assert(0, "expected failure");
 
 	t.assert(inner.failed, "inner test should be marked as failed");
@@ -110,7 +113,7 @@ testLog(t: ref T)
 testSkip(t: ref T)
 {
 	# Test that skip works by creating an inner test
-	inner := ref T("inner-skip", 0, 0, nil, 0);
+	inner := ref T("inner-skip", "", 0, 0, nil, 0);
 
 	# Simulate skip
 	{
@@ -127,7 +130,7 @@ testSkip(t: ref T)
 testFatal(t: ref T)
 {
 	# Test that fatal works by creating an inner test
-	inner := ref T("inner-fatal", 0, 0, nil, 0);
+	inner := ref T("inner-fatal", "", 0, 0, nil, 0);
 
 	# Simulate fatal
 	{

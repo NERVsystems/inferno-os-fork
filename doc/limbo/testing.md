@@ -33,10 +33,13 @@ passed := 0;
 failed := 0;
 skipped := 0;
 
+# Source file path for clickable error addresses
+SRCFILE: con "/tests/mycode_test.b";
+
 # Helper to run tests
 run(name: string, testfn: ref fn(t: ref T))
 {
-    t := testing->newT(name);
+    t := testing->newTsrc(name, SRCFILE);
     {
         testfn(t);
     } exception {
@@ -128,8 +131,20 @@ v := testing->getverbose(); # Get current setting
 ### Creating Tests
 
 ```limbo
-t := testing->newT("TestName");  # Creates test, prints "=== RUN TestName"
+# Basic (no source file tracking)
+t := testing->newT("TestName");
+
+# With clickable error addresses (recommended)
+SRCFILE: con "/tests/mycode_test.b";
+t := testing->newTsrc("TestName", SRCFILE);
 ```
+
+When using `newTsrc()`, failed tests output clickable addresses like:
+```
+--- FAIL: TestName (0.12s)
+    /tests/mycode_test.b:/testTestName/
+```
+Right-click the address in Xenith to navigate to the test function.
 
 ### T Methods
 
@@ -211,9 +226,12 @@ Every test file should:
 The `run()` helper function handles exception wrapping:
 
 ```limbo
+# Source file path for clickable error addresses
+SRCFILE: con "/tests/mycode_test.b";
+
 run(name: string, testfn: ref fn(t: ref T))
 {
-    t := testing->newT(name);
+    t := testing->newTsrc(name, SRCFILE);
     {
         testfn(t);
     } exception {

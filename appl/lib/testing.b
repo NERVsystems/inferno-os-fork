@@ -25,7 +25,15 @@ getverbose(): int
 newT(name: string): ref T
 {
 	sys->fprint(sys->fildes(2), "=== RUN   %s\n", name);
-	return ref T(name, 0, 0, nil, sys->millisec());
+	return ref T(name, nil, 0, 0, nil, sys->millisec());
+}
+
+# newTsrc: create test with source file for clickable addresses
+# On failure, outputs file:/testname/ format for Xenith plumbing
+newTsrc(name, srcfile: string): ref T
+{
+	sys->fprint(sys->fildes(2), "=== RUN   %s\n", name);
+	return ref T(name, srcfile, 0, 0, nil, sys->millisec());
 }
 
 # T.log: add message to test output
@@ -155,6 +163,9 @@ done(t: ref T): int
 		return 0;
 	} else if(t.failed) {
 		sys->fprint(sys->fildes(2), "--- FAIL: %s (%.2fs)\n", t.name, elapsedSec);
+		# Print clickable address: file:/testname/ format for Xenith plumbing
+		if(t.srcfile != nil)
+			sys->fprint(sys->fildes(2), "    %s:/test%s/\n", t.srcfile, t.name);
 		if(!verbosemode && t.output != nil)
 			printoutput(t);
 		return 0;

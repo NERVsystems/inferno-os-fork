@@ -23,10 +23,13 @@ passed := 0;
 failed := 0;
 skipped := 0;
 
+# Source file path for clickable error addresses
+SRCFILE: con "/tests/tempfile_test.b";
+
 # Helper to run a test and track results
 run(name: string, testfn: ref fn(t: ref T))
 {
-	t := testing->newT(name);
+	t := testing->newTsrc(name, SRCFILE);
 	{
 		testfn(t);
 	} exception {

@@ -6,6 +6,7 @@ Testing: module
 	T: adt
 	{
 		name:    string;
+		srcfile: string;		# source file for clickable addresses (optional)
 		failed:  int;
 		skipped: int;
 		output:  list of string;	# accumulated log output
@@ -37,7 +38,9 @@ Testing: module
 	init:     fn();
 
 	# Create a new T for a named test
+	# srcfile is optional - if provided, enables clickable file:/pattern/ addresses
 	newT:     fn(name: string): ref T;
+	newTsrc:  fn(name, srcfile: string): ref T;
 
 	# Run a test function and handle exceptions
 	# Call this wrapper around each test function:

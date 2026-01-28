@@ -7,6 +7,11 @@ implement ExampleTest;
 # Or compile first: limbo -I /module tests/example_test.b
 # Then run: emu tests/example_test.dis
 #
+# Note: Use newTsrc() with your source file path to enable clickable
+# error addresses in Xenith. On failure, output like:
+#     /tests/example_test.b:/testAdd/
+# can be right-clicked to navigate directly to the test function.
+#
 
 include "sys.m";
 	sys: Sys;
@@ -22,14 +27,18 @@ ExampleTest: module
 	init: fn(nil: ref Draw->Context, args: list of string);
 };
 
+# Source file path for clickable error addresses
+SRCFILE: con "/tests/example_test.b";
+
 passed := 0;
 failed := 0;
 skipped := 0;
 
 # Helper to run a test and track results
+# Uses newTsrc to enable clickable addresses on failure
 run(name: string, testfn: ref fn(t: ref T))
 {
-	t := testing->newT(name);
+	t := testing->newTsrc(name, SRCFILE);
 	{
 		testfn(t);
 	} exception {
