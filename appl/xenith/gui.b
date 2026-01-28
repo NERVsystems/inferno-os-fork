@@ -132,6 +132,12 @@ cursorswitch(cur: ref Dat->Cursor)
 
 killwins()
 {
+	# Write "halt" to /dev/sysctl to trigger cleanexit() at C level
+	# This properly cleans up SDL and closes the window
+	fd := sys->open("/dev/sysctl", Sys->OWRITE);
+	if(fd != nil)
+		sys->fprint(fd, "halt");
+	# Fallback to wmctl if sysctl fails
 	wmclient->win.wmctl("exit");
 }
 
