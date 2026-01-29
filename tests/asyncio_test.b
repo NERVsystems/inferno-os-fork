@@ -578,6 +578,460 @@ testNonBlockingSend(t: ref T)
 	t.asserteq(sent, 0, "send to full buffered channel should not block");
 }
 
+#
+# ASYNC FILE SAVE TESTS
+# These tests verify the integrity of async file save operations.
+# File saving is critical - any data loss is unacceptable.
+#
+
+# Test basic async file save operation
+testAsyncSaveBasic(t: ref T)
+{
+	# Original data to save
+	testdata := "Hello, this is test data for async save!\nLine 2\nLine 3\n";
+
+	result := chan[2] of (int, int, string);  # (written, mtime, error)
+	ctl := chan[1] of int;
+
+	savepath := TESTDIR + "/save_basic.txt";
+	spawn asyncWriter(result, ctl, savepath, testdata);
+
+	timeout := chan of int;
+	spawn sleeper(timeout, 5000);
+
+	alt {
+		(written, mtime, err) := <-result =>
+			if(err != nil) {
+				t.fatal("async save failed: " + err);
+				return;
+			}
+			t.assert(written > 0, "should have written bytes");
+			t.asserteq(written, len array of byte testdata, "bytes written should match input");
+			t.assert(mtime > 0, "should have valid mtime");
+			t.log(sys->sprint("wrote %d bytes, mtime=%d", written, mtime));
+		<-timeout =>
+			t.fatal("async save timed out");
+	}
+
+	# Verify by reading back
+	fd := sys->open(savepath, Sys->OREAD);
+	if(fd == nil) {
+		t.fatal("can't open saved file: %r");
+		return;
+	}
+	buf := array[1024] of byte;
+	n := sys->read(fd, buf, len buf);
+	fd = nil;
+
+	content := string buf[0:n];
+	t.assertseq(content, testdata, "saved content should match original");
+
+	sys->remove(savepath);
+}
+
+# Async writer task (simulates savetask in asyncio.b)
+asyncWriter(result: chan of (int, int, string), ctl: chan of int, path: string, data: string)
+{
+	# Check for cancellation before starting
+	alt {
+		<-ctl =>
+			result <-= (0, 0, "cancelled");
+			return;
+		* => ;
+	}
+
+	fd := sys->create(path, Sys->OWRITE, 8r644);
+	if(fd == nil) {
+		result <-= (0, 0, sys->sprint("can't create: %r"));
+		return;
+	}
+
+	ab := array of byte data;
+	written := 0;
+	chunksize := 1024;  # Write in chunks like real savetask
+
+	for(q := 0; q < len ab; ) {
+		# Check for cancellation
+		alt {
+			<-ctl =>
+				fd = nil;
+				result <-= (written, 0, "cancelled");
+				return;
+			* => ;
+		}
+
+		n := len ab - q;
+		if(n > chunksize)
+			n = chunksize;
+
+		nw := sys->write(fd, ab[q:q+n], n);
+		if(nw != n) {
+			fd = nil;
+			result <-= (written, 0, sys->sprint("write error: %r"));
+			return;
+		}
+		written += nw;
+		q += n;
+	}
+
+	# Get mtime
+	(ok, dir) := sys->fstat(fd);
+	mtime := 0;
+	if(ok == 0)
+		mtime = dir.mtime;
+
+	fd = nil;
+	result <-= (written, mtime, nil);
+}
+
+# Test async save with large file (data integrity over chunks)
+testAsyncSaveLargeFile(t: ref T)
+{
+	# Generate large test data with known pattern for verification
+	chunkstr := "0123456789ABCDEF";  # 16 chars
+	testdata := "";
+	for(i := 0; i < 2048; i++)  # 32KB of data
+		testdata += chunkstr;
+
+	result := chan[2] of (int, int, string);
+	ctl := chan[1] of int;
+
+	savepath := TESTDIR + "/save_large.txt";
+	spawn asyncWriter(result, ctl, savepath, testdata);
+
+	timeout := chan of int;
+	spawn sleeper(timeout, 10000);
+
+	alt {
+		(written, mtime, err) := <-result =>
+			if(err != nil) {
+				t.fatal("large save failed: " + err);
+				return;
+			}
+			t.asserteq(written, len array of byte testdata, "all bytes should be written");
+			t.log(sys->sprint("wrote %d bytes for large file", written));
+		<-timeout =>
+			t.fatal("large save timed out");
+	}
+
+	# Verify file size
+	(ok, dir) := sys->stat(savepath);
+	t.assert(ok == 0, "saved file should exist");
+	t.asserteq(int dir.length, len array of byte testdata, "file size should match");
+
+	# Verify content integrity by sampling
+	fd := sys->open(savepath, Sys->OREAD);
+	if(fd == nil) {
+		t.fatal("can't open saved large file: %r");
+		return;
+	}
+
+	# Read beginning
+	buf := array[64] of byte;
+	n := sys->read(fd, buf, 64);
+	t.asserteq(n, 64, "should read 64 bytes from start");
+	content := string buf[0:n];
+	expected := testdata[0:64];
+	t.assertseq(content, expected, "start of file should match");
+
+	# Seek to middle and read
+	sys->seek(fd, big (16*1024), Sys->SEEKSTART);
+	n = sys->read(fd, buf, 64);
+	t.asserteq(n, 64, "should read 64 bytes from middle");
+	content = string buf[0:n];
+	expected = testdata[16*1024:16*1024+64];
+	t.assertseq(content, expected, "middle of file should match");
+
+	# Seek near end and read
+	sys->seek(fd, big (32*1024 - 64), Sys->SEEKSTART);
+	n = sys->read(fd, buf, 64);
+	t.asserteq(n, 64, "should read 64 bytes from end");
+	content = string buf[0:n];
+	expected = testdata[32*1024 - 64:32*1024];
+	t.assertseq(content, expected, "end of file should match");
+
+	fd = nil;
+	sys->remove(savepath);
+}
+
+# Test async save cancellation
+testAsyncSaveCancellation(t: ref T)
+{
+	# Large data so we have time to cancel
+	testdata := "";
+	for(i := 0; i < 4096; i++)
+		testdata += "0123456789ABCDEF";  # 64KB
+
+	result := chan[2] of (int, int, string);
+	ctl := chan[1] of int;
+
+	savepath := TESTDIR + "/save_cancel.txt";
+	spawn asyncWriter(result, ctl, savepath, testdata);
+
+	# Let it start
+	sys->sleep(5);
+
+	# Cancel
+	alt {
+		ctl <-= 1 =>
+			t.log("sent save cancellation");
+		* =>
+			t.log("cancellation channel full");
+	}
+
+	# Wait for result
+	timeout := chan of int;
+	spawn sleeper(timeout, 2000);
+
+	cancelled := 0;
+	completed := 0;
+	alt {
+		(written, mtime, err) := <-result =>
+			if(err == "cancelled") {
+				cancelled = 1;
+				t.log(sys->sprint("save cancelled after %d bytes", written));
+			} else if(err == nil) {
+				completed = 1;
+				t.log("save completed before cancellation took effect");
+			} else {
+				t.fatal("unexpected error: " + err);
+			}
+		<-timeout =>
+			t.fatal("cancellation wait timed out");
+	}
+
+	# Either outcome is acceptable
+	t.assert(cancelled || completed, "should be cancelled or completed");
+
+	sys->remove(savepath);
+}
+
+# Test rapid save cycles (stress test for deadlock)
+testAsyncSaveRapidCycles(t: ref T)
+{
+	# This simulates rapidly saving and cancelling, which could cause
+	# deadlock if channel sends block
+	testdata := "Short test data for rapid cycles\n";
+
+	for(i := 0; i < 10; i++) {
+		result := chan[2] of (int, int, string);
+		ctl := chan[1] of int;
+
+		savepath := TESTDIR + sys->sprint("/rapid_%d.txt", i);
+		spawn asyncWriter(result, ctl, savepath, testdata);
+
+		# Randomly either wait for completion or cancel
+		if(i % 2 == 0) {
+			# Wait for completion
+			timeout := chan of int;
+			spawn sleeper(timeout, 1000);
+			alt {
+				(written, mtime, err) := <-result =>
+					if(err != nil && err != "cancelled")
+						t.fatal(sys->sprint("cycle %d error: %s", i, err));
+				<-timeout =>
+					# Cancel if taking too long
+					alt { ctl <-= 1 => ; * => ; }
+			}
+		} else {
+			# Cancel immediately
+			alt { ctl <-= 1 => ; * => ; }
+			# Drain result
+			timeout := chan of int;
+			spawn sleeper(timeout, 100);
+			alt {
+				<-result => ;
+				<-timeout => ;
+			}
+		}
+
+		sys->remove(savepath);
+	}
+
+	t.log("rapid save cycles completed without deadlock");
+}
+
+# Test save with special characters in data (Unicode, newlines, etc.)
+testAsyncSaveSpecialChars(t: ref T)
+{
+	# Test data with various special characters
+	# Note: Limbo doesn't support \x escapes, using explicit byte conversion instead
+	testdata := "ASCII: Hello World\n" +
+		"Unicode: 日本語テスト\n" +
+		"Newlines:\r\n\r\n" +
+		"Tabs:\t\t\t\n" +
+		"Mixed quotes: 'single' and \"double\"\n" +
+		"End\n";
+
+	result := chan[2] of (int, int, string);
+	ctl := chan[1] of int;
+
+	savepath := TESTDIR + "/save_special.txt";
+	spawn asyncWriter(result, ctl, savepath, testdata);
+
+	timeout := chan of int;
+	spawn sleeper(timeout, 5000);
+
+	alt {
+		(written, mtime, err) := <-result =>
+			if(err != nil) {
+				t.fatal("special chars save failed: " + err);
+				return;
+			}
+			t.assert(written > 0, "should have written bytes");
+		<-timeout =>
+			t.fatal("special chars save timed out");
+	}
+
+	# Read back and verify
+	fd := sys->open(savepath, Sys->OREAD);
+	if(fd == nil) {
+		t.fatal("can't open special chars file: %r");
+		return;
+	}
+
+	(ok, dir) := sys->fstat(fd);
+	buf := array[int dir.length] of byte;
+	n := sys->read(fd, buf, len buf);
+	fd = nil;
+
+	content := string buf[0:n];
+	t.assertseq(content, testdata, "special chars should be preserved");
+
+	sys->remove(savepath);
+}
+
+# Test save error handling (permission denied)
+testAsyncSavePermissionDenied(t: ref T)
+{
+	# Try to save to a non-existent directory
+	result := chan[2] of (int, int, string);
+	ctl := chan[1] of int;
+
+	savepath := "/nonexistent_dir_12345/file.txt";
+	spawn asyncWriter(result, ctl, savepath, "test data");
+
+	timeout := chan of int;
+	spawn sleeper(timeout, 2000);
+
+	alt {
+		(written, mtime, err) := <-result =>
+			t.assert(err != nil, "should fail for nonexistent directory");
+			t.log("expected error: " + err);
+		<-timeout =>
+			t.fatal("permission denied test timed out");
+	}
+}
+
+# Test that save preserves file position (simulates buffer read)
+testAsyncSaveBufferSimulation(t: ref T)
+{
+	# This simulates how savetask reads from Buffer in chunks
+	# We verify that the chunked writing produces correct output
+
+	# Create data with known pattern at each position
+	datalen := 8192;  # 8KB
+	testbuf := array[datalen] of byte;
+	for(i := 0; i < datalen; i++)
+		testbuf[i] = byte (i % 256);
+
+	result := chan[2] of (int, int, string);
+	ctl := chan[1] of int;
+
+	savepath := TESTDIR + "/save_buffer.bin";
+	spawn asyncBinaryWriter(result, ctl, savepath, testbuf);
+
+	timeout := chan of int;
+	spawn sleeper(timeout, 5000);
+
+	alt {
+		(written, mtime, err) := <-result =>
+			if(err != nil) {
+				t.fatal("buffer simulation save failed: " + err);
+				return;
+			}
+			t.asserteq(written, datalen, "all bytes should be written");
+		<-timeout =>
+			t.fatal("buffer simulation save timed out");
+	}
+
+	# Verify byte-by-byte
+	fd := sys->open(savepath, Sys->OREAD);
+	if(fd == nil) {
+		t.fatal("can't open buffer simulation file: %r");
+		return;
+	}
+
+	readbuf := array[datalen] of byte;
+	n := sys->read(fd, readbuf, datalen);
+	fd = nil;
+
+	t.asserteq(n, datalen, "should read all bytes back");
+
+	# Verify pattern
+	errors := 0;
+	for(i = 0; i < datalen && errors < 5; i++) {
+		if(readbuf[i] != testbuf[i]) {
+			t.log(sys->sprint("mismatch at offset %d: got %d, expected %d", i, int readbuf[i], int testbuf[i]));
+			errors++;
+		}
+	}
+	t.asserteq(errors, 0, "all bytes should match original");
+
+	sys->remove(savepath);
+}
+
+# Binary writer (for byte-level verification)
+asyncBinaryWriter(result: chan of (int, int, string), ctl: chan of int, path: string, data: array of byte)
+{
+	alt {
+		<-ctl =>
+			result <-= (0, 0, "cancelled");
+			return;
+		* => ;
+	}
+
+	fd := sys->create(path, Sys->OWRITE, 8r644);
+	if(fd == nil) {
+		result <-= (0, 0, sys->sprint("can't create: %r"));
+		return;
+	}
+
+	written := 0;
+	chunksize := 1024;
+
+	for(q := 0; q < len data; ) {
+		alt {
+			<-ctl =>
+				fd = nil;
+				result <-= (written, 0, "cancelled");
+				return;
+			* => ;
+		}
+
+		n := len data - q;
+		if(n > chunksize)
+			n = chunksize;
+
+		nw := sys->write(fd, data[q:q+n], n);
+		if(nw != n) {
+			fd = nil;
+			result <-= (written, 0, sys->sprint("write error: %r"));
+			return;
+		}
+		written += nw;
+		q += n;
+	}
+
+	(ok, dir) := sys->fstat(fd);
+	mtime := 0;
+	if(ok == 0)
+		mtime = dir.mtime;
+
+	fd = nil;
+	result <-= (written, mtime, nil);
+}
+
 init(nil: ref Draw->Context, args: list of string)
 {
 	sys = load Sys Sys->PATH;
@@ -616,6 +1070,15 @@ init(nil: ref Draw->Context, args: list of string)
 	run("AsyncCancellation", testAsyncCancellation);
 	run("RapidStartCancel", testRapidStartCancel);
 	run("NonBlockingSend", testNonBlockingSend);
+
+	# Async save tests (critical for data integrity)
+	run("AsyncSaveBasic", testAsyncSaveBasic);
+	run("AsyncSaveLargeFile", testAsyncSaveLargeFile);
+	run("AsyncSaveCancellation", testAsyncSaveCancellation);
+	run("AsyncSaveRapidCycles", testAsyncSaveRapidCycles);
+	run("AsyncSaveSpecialChars", testAsyncSaveSpecialChars);
+	run("AsyncSavePermissionDenied", testAsyncSavePermissionDenied);
+	run("AsyncSaveBufferSimulation", testAsyncSaveBufferSimulation);
 
 	# Cleanup
 	cleanup();

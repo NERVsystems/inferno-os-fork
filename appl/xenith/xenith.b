@@ -39,7 +39,7 @@ sprint : import sys;
 BACK, HIGH, BORD, TEXT, HTEXT, NCOL : import Framem;
 Point, Rect, Font, Image, Display, Pointer: import drawm;
 TRUE, FALSE, maxtab : import dat;
-Ref, Reffont, Command, Timer, Lock, Cursor : import dat;
+Ref, Reffont, Command, Timer, Lock, Cursor, Dirlist : import dat;
 row, reffont, activecol, mouse, typetext, mousetext, barttext, argtext, seltext, button, modbutton, colbutton, arrowcursor, boxcursor, plumbed : import dat;
 Xfid : import xfidm;
 cmouse, ckeyboard, cwait, ccommand, ckill, cxfidalloc, cxfidfree, cerr, cplumb, cedit, casync, scrollstate : import dat;
@@ -816,6 +816,75 @@ mousetask()
 								w.body.fill();
 								scrl->scrdraw(w.body);
 							}
+						}
+						row.qlock.unlock();
+					DirEntry =>
+						# Add directory entry to window's list
+						row.qlock.lock();
+						w := look->lookid(msg.winid, 0);
+						if(w != nil && w.col != nil && w.isdir) {
+							# Add entry to dlp array
+							dl := ref Dirlist(msg.name, 0);  # Width calculated later
+							ndl := w.ndl + 1;
+							odlp := w.dlp;
+							w.dlp = array[ndl] of ref Dirlist;
+							if(odlp != nil)
+								w.dlp[0:] = odlp[0:w.ndl];
+							w.dlp[ndl-1] = dl;
+							w.ndl = ndl;
+						}
+						row.qlock.unlock();
+					DirComplete =>
+						# Finalize directory listing
+						row.qlock.lock();
+						if(msg.err != nil) {
+							warning(nil, sprint("dir load: %s\n", msg.err));
+						} else {
+							w := look->lookid(msg.winid, 0);
+							if(w != nil && w.col != nil && w.isdir) {
+								w.body.file.unread = 0;
+								w.asyncload = nil;
+								# Sort and display directory entries
+								textm->dirfinalize(w.body);
+								w.settag();
+								w.body.fill();
+								scrl->scrdraw(w.body);
+							}
+						}
+						row.qlock.unlock();
+					SaveProgress =>
+						# Update status during async file save (for future progress indicator)
+						;
+					SaveComplete =>
+						# Finish async file save
+						row.qlock.lock();
+						w := look->lookid(msg.winid, 0);
+						if(w != nil && w.col != nil && w.asyncsave != nil) {
+							f := w.body.file;
+							if(msg.err != nil) {
+								warning(nil, sprint("save error: %s\n", msg.err));
+							} else {
+								# Update file metadata on success
+								if(w.savename == f.name) {
+									# Saved entire file to its own name
+									(ok, d) := sys->stat(msg.path);
+									if(ok >= 0) {
+										f.qidpath = d.qid.path;
+										f.dev = d.dev;
+										f.mtime = msg.mtime;
+									}
+									f.mod = FALSE;
+									w.dirty = FALSE;
+									f.unread = FALSE;
+									for(i := 0; i < f.ntext; i++) {
+										f.text[i].w.putseq = f.seq;
+										f.text[i].w.dirty = FALSE;
+									}
+								}
+								w.settag();
+							}
+							w.asyncsave = nil;
+							w.savename = nil;
 						}
 						row.qlock.unlock();
 				}

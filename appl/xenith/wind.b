@@ -306,10 +306,14 @@ Window.close(w : self ref Window)
 	i : int;
 
 	if(w.refx.dec() == 0){
-		# Cancel any pending async file load
+		# Cancel any pending async operations
 		if(w.asyncload != nil) {
 			asyncio->asynccancel(w.asyncload);
 			w.asyncload = nil;
+		}
+		if(w.asyncsave != nil) {
+			asyncio->asynccancel(w.asyncsave);
+			w.asyncsave = nil;
 		}
 		w.dirfree();
 		w.tag.close();

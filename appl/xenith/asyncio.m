@@ -48,6 +48,29 @@ Asyncio: module {
 				nbytes: int;    # Total bytes read
 				nrunes: int;    # Total runes read
 				err: string;    # nil on success
+		DirEntry =>
+				opid: int;      # Operation ID
+				winid: int;     # Window ID
+				name: string;   # Entry name (with trailing / for dirs)
+				isdir: int;     # 1 if directory
+		DirComplete =>
+				opid: int;      # Operation ID
+				winid: int;     # Window ID
+				path: string;   # Directory path
+				nentries: int;  # Total entries read
+				err: string;    # nil on success
+		SaveProgress =>
+				opid: int;      # Operation ID
+				winid: int;     # Window ID
+				written: int;   # Bytes written so far
+				total: int;     # Total bytes to write
+		SaveComplete =>
+				opid: int;      # Operation ID
+				winid: int;     # Window ID
+				path: string;   # File path
+				nbytes: int;    # Total bytes written
+				mtime: int;     # New mtime after save
+				err: string;    # nil on success
 		}
 	};
 
@@ -68,6 +91,13 @@ Asyncio: module {
 
 	# Start async text file load - returns operation handle
 	asyncloadtext: fn(path: string, q0: int, winid: int): ref AsyncOp;
+
+	# Start async directory listing - returns operation handle
+	asyncloaddir: fn(path: string, winid: int): ref AsyncOp;
+
+	# Start async file save - returns operation handle
+	# Reads from buffer positions q0..q1 and writes to path
+	asyncsavefile: fn(path: string, winid: int, buf: ref Bufferm->Buffer, q0, q1: int): ref AsyncOp;
 
 	# Cancel an async operation
 	asynccancel: fn(op: ref AsyncOp);

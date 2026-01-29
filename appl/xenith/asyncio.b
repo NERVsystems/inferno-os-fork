@@ -5,8 +5,10 @@ include "common.m";
 sys: Sys;
 dat: Dat;
 utils: Utils;
+bufferm: Bufferm;
 
 error, warning: import utils;
+Buffer: import bufferm;
 
 # Next operation ID
 nextopid: int;
@@ -19,6 +21,7 @@ init(mods: ref Dat->Mods)
 	sys = mods.sys;
 	dat = mods.dat;
 	utils = mods.utils;
+	bufferm = mods.bufferm;
 
 	nextopid = 1;
 	# Initialize the global casync channel in dat module
@@ -324,5 +327,181 @@ readtask(op: ref AsyncOp, path: string, q0: int)
 
 	fd = nil;
 	dat->casync <-= ref AsyncMsg.Complete(op.opid, nbytes, nrunes, nil);
+	op.active = 0;
+}
+
+asyncloaddir(path: string, winid: int): ref AsyncOp
+{
+	op := ref AsyncOp;
+	op.opid = nextopid++;
+	op.ctl = chan[1] of int;
+	op.path = path;
+	op.active = 1;
+	op.winid = winid;
+
+	spawn dirtask(op, path, winid);
+	return op;
+}
+
+dirtask(op: ref AsyncOp, path: string, winid: int)
+{
+	# Check for cancellation before starting
+	alt {
+		<-op.ctl =>
+			op.active = 0;
+			return;
+		* => ;
+	}
+
+	fd := sys->open(path, Sys->OREAD);
+	if(fd == nil) {
+		alt {
+			dat->casync <-= ref AsyncMsg.DirComplete(op.opid, winid, path, 0, sys->sprint("can't open: %r")) => ;
+			<-op.ctl => ;
+		}
+		op.active = 0;
+		return;
+	}
+
+	nentries := 0;
+
+	for(;;) {
+		# Check for cancellation
+		alt {
+			<-op.ctl =>
+				fd = nil;
+				op.active = 0;
+				return;
+			* => ;
+		}
+
+		(nd, dbuf) := sys->dirread(fd);
+		if(nd <= 0)
+			break;
+
+		for(i := 0; i < nd; i++) {
+			name := dbuf[i].name;
+			isdir := 0;
+			if(dbuf[i].mode & Sys->DMDIR) {
+				name = name + "/";
+				isdir = 1;
+			}
+
+			# Send entry - check for cancellation while waiting
+			alt {
+				dat->casync <-= ref AsyncMsg.DirEntry(op.opid, winid, name, isdir) =>
+					nentries++;
+				<-op.ctl =>
+					fd = nil;
+					op.active = 0;
+					return;
+			}
+		}
+	}
+
+	fd = nil;
+	# Final send - non-blocking with cancellation check
+	alt {
+		dat->casync <-= ref AsyncMsg.DirComplete(op.opid, winid, path, nentries, nil) => ;
+		<-op.ctl => ;
+	}
+	op.active = 0;
+}
+
+asyncsavefile(path: string, winid: int, buf: ref Bufferm->Buffer, q0, q1: int): ref AsyncOp
+{
+	op := ref AsyncOp;
+	op.opid = nextopid++;
+	op.ctl = chan[1] of int;
+	op.path = path;
+	op.active = 1;
+	op.winid = winid;
+
+	spawn savetask(op, path, winid, buf, q0, q1);
+	return op;
+}
+
+savetask(op: ref AsyncOp, path: string, winid: int, buf: ref Bufferm->Buffer, q0, q1: int)
+{
+	# Check for cancellation before starting
+	alt {
+		<-op.ctl =>
+			op.active = 0;
+			return;
+		* => ;
+	}
+
+	fd := sys->create(path, Sys->OWRITE, 8r664);
+	if(fd == nil) {
+		alt {
+			dat->casync <-= ref AsyncMsg.SaveComplete(op.opid, winid, path, 0, 0, sys->sprint("can't create: %r")) => ;
+			<-op.ctl => ;
+		}
+		op.active = 0;
+		return;
+	}
+
+	total := q1 - q0;
+	written := 0;
+	rp := ref Dat->Astring;
+
+	for(q := q0; q < q1; ) {
+		# Check for cancellation
+		alt {
+			<-op.ctl =>
+				fd = nil;
+				op.active = 0;
+				return;
+			* => ;
+		}
+
+		n := q1 - q;
+		if(n > Dat->BUFSIZE)
+			n = Dat->BUFSIZE;
+
+		buf.read(q, rp, 0, n);
+		ab := array of byte rp.s[0:n];
+
+		nw := sys->write(fd, ab, len ab);
+		ab = nil;
+
+		if(nw != len ab) {
+			fd = nil;
+			alt {
+				dat->casync <-= ref AsyncMsg.SaveComplete(op.opid, winid, path, written, 0, sys->sprint("write error: %r")) => ;
+				<-op.ctl => ;
+			}
+			op.active = 0;
+			return;
+		}
+
+		written += nw;
+		q += n;
+
+		# Send progress every 64KB
+		if((written % (64*1024)) < Dat->BUFSIZE) {
+			alt {
+				dat->casync <-= ref AsyncMsg.SaveProgress(op.opid, winid, written, total) => ;
+				<-op.ctl =>
+					fd = nil;
+					op.active = 0;
+					return;
+				* => ;
+			}
+		}
+	}
+
+	# Get new mtime
+	(ok, dir) := sys->fstat(fd);
+	mtime := 0;
+	if(ok == 0)
+		mtime = dir.mtime;
+
+	fd = nil;
+	# Final send - non-blocking with cancellation check
+	alt {
+		dat->casync <-= ref AsyncMsg.SaveComplete(op.opid, winid, path, written, mtime, nil) => ;
+		<-op.ctl => ;
+	}
 	op.active = 0;
 }
