@@ -32,6 +32,8 @@ editm: Edit;
 editlog: Editlog;
 editcmd: Editcmd;
 styxaux: Styxaux;
+asyncio: Asyncio;
+imgload: Imgload;
 
 sprint : import sys;
 BACK, HIGH, BORD, TEXT, HTEXT, NCOL : import Framem;
@@ -40,7 +42,8 @@ TRUE, FALSE, maxtab : import dat;
 Ref, Reffont, Command, Timer, Lock, Cursor : import dat;
 row, reffont, activecol, mouse, typetext, mousetext, barttext, argtext, seltext, button, modbutton, colbutton, arrowcursor, boxcursor, plumbed : import dat;
 Xfid : import xfidm;
-cmouse, ckeyboard, cwait, ccommand, ckill, cxfidalloc, cxfidfree, cerr, cplumb, cedit : import dat;
+cmouse, ckeyboard, cwait, ccommand, ckill, cxfidalloc, cxfidfree, cerr, cplumb, cedit, casync : import dat;
+AsyncMsg : import asyncio;
 font, bflush, balloc, draw : import graph;
 Arg, PNPROC, PNGROUP : import utils;
 arginit, argopt, argf, error, warning, postnote : import utils;
@@ -99,13 +102,16 @@ init(ctxt : ref Draw->Context, argl : list of string)
 		editlog = load Editlog path(Editlog->PATH);
 		editcmd = load Editcmd path(Editcmd->PATH);
 		styxaux = load Styxaux path(Styxaux->PATH);
-		
+		asyncio = load Asyncio path(Asyncio->PATH);
+		imgload = load Imgload path(Imgload->PATH);
+
 		mods := ref Dat->Mods(sys, bufio, drawm, styx, styxaux,
 						xenith, gui, graph, dat, framem,
 						utils, regx, scrl,
 						textm, filem, windowm, rowm, columnm,
 						bufferm, diskm, exec, look, timerm,
-						fsys, xfidm, plumbmsg, editm, editlog, editcmd);
+						fsys, xfidm, plumbmsg, editm, editlog, editcmd,
+						asyncio);
 	
 		styx->init();
 		styxaux->init();
@@ -132,7 +138,9 @@ init(ctxt : ref Draw->Context, argl : list of string)
 		editm->init(mods);
 		editlog->init(mods);
 		editcmd->init(mods);
-	
+		asyncio->init(mods);
+		imgload->init(display);
+
 		utils->debuginit();
 	
 	
@@ -301,14 +309,15 @@ main(argl : list of string)
 	timerm->timerinit();
 	regx->rxinit();
 
-	cwait = chan of string;
-	ccommand = chan of ref Command;
-	ckill = chan of string;
-	cxfidalloc = chan of ref Xfid;
-	cxfidfree = chan of ref Xfid;
-	cerr = chan of string;
-	cplumb = chan of ref Msg;
-	cedit = chan of int;
+	# Buffered channels to prevent spawned commands from blocking on sends
+	cwait = chan[16] of string;
+	ccommand = chan[8] of ref Command;
+	ckill = chan[4] of string;
+	cxfidalloc = chan of ref Xfid;  # Keep unbuffered - synchronous allocation
+	cxfidfree = chan[8] of ref Xfid;
+	cerr = chan[32] of string;
+	cplumb = chan[8] of ref Msg;
+	cedit = chan[1] of int;
 
 	gui->spawnprocs();
 	# spawn keyboardproc();
@@ -553,17 +562,20 @@ mousetask()
 					break;
 				}
 				if (mouse.buttons & M_HELP) {
+					row.qlock.unlock();  # Release before warning to avoid blocking
 					warning(nil, "no help provided (yet)");
 					bflush();
-					row.qlock.unlock();
 					break;
 				}
 				if(mouse.buttons & M_RESIZE){
+					clipr := mainwin.clipr;  # Capture state before releasing lock
+					row.qlock.unlock();  # Release during expensive draw operations
 					draw(mainwin, mainwin.r, bgcol, nil, mainwin.r.min);
 					scrl->scrresize();
-					row.reshape(mainwin.clipr);
-					bflush();
+					row.qlock.lock();  # Reacquire for reshape
+					row.reshape(clipr);
 					row.qlock.unlock();
+					bflush();
 					break;
 				}
 				t = row.which(mouse.xy);
@@ -604,11 +616,17 @@ mousetask()
 				barttext = t;
 				if(t.what==Body && mouse.xy.in(t.scrollr)){
 					if(but){
-						# Click-drag on scrollbar
+						# Click-drag on scrollbar - release row lock during tracking
 						w.lock('M');
 						t.eq0 = ~0;
+						row.qlock.unlock();  # Release row lock during scroll tracking
 						scrl->scroll(t, but);
-						t.w.unlock();
+						row.qlock.lock();  # Reacquire row lock
+						# Validate window still exists (col != nil is validity marker)
+						if(t.w != nil && t.w.col != nil)
+							t.w.unlock();
+						else if(t.w != nil)
+							t.w.unlock();  # Still unlock if window exists
 					} else if(mouse.buttons & (8|16)){
 						# Scroll wheel on scrollbar - Acme-style variable speed
 						# Near top = slow (1 line), near bottom = fast (10 lines)
@@ -711,6 +729,53 @@ mousetask()
 						look->plumbshow(m);
 				}
 				bflush();
+			amsg := <-casync =>
+				# Handle async I/O results
+				pick msg := amsg {
+					Chunk =>
+						# Future: insert chunk into file
+						row.qlock.lock();
+						row.qlock.unlock();
+					Progress =>
+						# Future: show progress indicator
+						;
+					Complete =>
+						row.qlock.lock();
+						if(msg.err != nil)
+							warning(nil, sprint("async read: %s\n", msg.err));
+						row.qlock.unlock();
+					Error =>
+						row.qlock.lock();
+						warning(nil, sprint("async read error: %s\n", msg.err));
+						row.qlock.unlock();
+					ImageData =>
+						# Spawn decode in background task for true concurrency
+						if(msg.err != nil) {
+							row.qlock.lock();
+							warning(nil, sprint("image load: %s\n", msg.err));
+							row.qlock.unlock();
+						} else if(msg.data != nil) {
+							# Spawn decode task - it will send ImageDecoded when done
+							spawn decodetask(msg.winid, msg.path, msg.data);
+						}
+					ImageDecoded =>
+						# Apply decoded image to window
+						row.qlock.lock();
+						if(msg.err != nil) {
+							warning(nil, sprint("image decode: %s\n", msg.err));
+						} else if(msg.image != nil) {
+							w := look->lookid(msg.winid, 0);
+							if(w != nil && w.col != nil) {
+								w.bodyimage = msg.image;
+								w.imagepath = msg.path;
+								w.imagemode = 1;
+								w.imageoffset = Point(0, 0);
+								w.drawimage();
+							}
+						}
+						row.qlock.unlock();
+				}
+				bflush();
 			}
 		}
 	}
@@ -720,6 +785,28 @@ mousetask()
 			raise e;
 			# xenithexit(nil);
 	}
+}
+
+# Background task to decode image without blocking UI
+decodetask(winid: int, path: string, data: array of byte)
+{
+	im: ref Image;
+	err: string;
+
+	{
+		(im, err) = imgload->readimagedata(data, path);
+	}
+	exception e {
+		"out of memory*" =>
+			err = "image too large for heap (try: emu -pheap=128000000)";
+			im = nil;
+		* =>
+			err = "decode failed: " + e;
+			im = nil;
+	}
+
+	# Send result back to main loop
+	casync <-= ref AsyncMsg.ImageDecoded(winid, path, im, err);
 }
 
 # list of processes that have exited but we have not heard of yet

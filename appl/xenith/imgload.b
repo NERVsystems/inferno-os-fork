@@ -59,14 +59,15 @@ SPng: adt {
 display: ref Display;
 
 # Maximum image size: 16 megapixels (e.g., 4000x4000)
+# For larger images, increase heap: emu -pheap=128000000 ...
 MAXPIXELS: con 16 * 1024 * 1024;
 
-# Maximum for interlaced images (must fit imgbuf in ~24MB heap allocation)
-# 24MB / 3 bytes per pixel = 8 million pixels
+# Maximum for interlaced images (must fit imgbuf in heap)
+# 8 million pixels × 3 bytes = 24MB intermediate buffer
 MAXPIXELS_INTERLACED: con 8 * 1024 * 1024;
 
 # Maximum edge dimension
-MAXDIM: con 4096;
+MAXDIM: con 8192;
 
 init(d: ref Display)
 {
@@ -137,6 +138,47 @@ readimage(path: string): (ref Image, string)
 	# PPM P3 (ASCII) magic: "P3"
 	if(buf[0] == byte 'P' && buf[1] == byte '3')
 		return loadppm(fd, path);
+
+	fd.close();
+	return (nil, "unrecognized image format");
+}
+
+# Load image from raw bytes (for async loading where file was read in background)
+readimagedata(data: array of byte, hint: string): (ref Image, string)
+{
+	if(display == nil)
+		return (nil, "imgload not initialized");
+
+	if(data == nil || len data < 8)
+		return (nil, "image data too small");
+
+	# Create Iobuf from memory
+	fd := bufio->aopen(data);
+	if(fd == nil)
+		return (nil, "can't create buffer from image data");
+
+	# Read magic bytes
+	buf := array[8] of byte;
+	n := fd.read(buf, 8);
+	if(n < 2){
+		fd.close();
+		return (nil, "image data too small");
+	}
+
+	# Reset to beginning
+	fd.seek(big 0, Bufio->SEEKSTART);
+
+	# PNG magic: 137 80 78 71 13 10 26 10
+	if(n >= 8 && ispng(buf))
+		return loadpng(fd, hint);
+
+	# PPM P6 magic: "P6"
+	if(buf[0] == byte 'P' && buf[1] == byte '6')
+		return loadppm(fd, hint);
+
+	# PPM P3 (ASCII) magic: "P3"
+	if(buf[0] == byte 'P' && buf[1] == byte '3')
+		return loadppm(fd, hint);
 
 	fd.close();
 	return (nil, "unrecognized image format");

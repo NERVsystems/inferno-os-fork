@@ -1,0 +1,218 @@
+implement Asyncio;
+
+include "common.m";
+
+sys: Sys;
+dat: Dat;
+utils: Utils;
+
+error, warning: import utils;
+
+# Next operation ID
+nextopid: int;
+
+# Chunk size for reads
+CHUNKSIZE: con 8*1024;
+
+init(mods: ref Dat->Mods)
+{
+	sys = mods.sys;
+	dat = mods.dat;
+	utils = mods.utils;
+
+	nextopid = 1;
+	# Initialize the global casync channel in dat module
+	dat->casync = chan[8] of ref AsyncMsg;
+}
+
+asyncload(path: string, q0: int): ref AsyncOp
+{
+	op := ref AsyncOp;
+	op.opid = nextopid++;
+	op.ctl = chan[1] of int;
+	op.path = path;
+	op.active = 1;
+	op.winid = 0;
+
+	spawn readtask(op, path, q0);
+	return op;
+}
+
+asyncloadimage(path: string, winid: int): ref AsyncOp
+{
+	op := ref AsyncOp;
+	op.opid = nextopid++;
+	op.ctl = chan[1] of int;
+	op.path = path;
+	op.active = 1;
+	op.winid = winid;
+
+	spawn imagetask(op, path, winid);
+	return op;
+}
+
+imagetask(op: ref AsyncOp, path: string, winid: int)
+{
+	# Check for cancellation before starting
+	alt {
+		<-op.ctl =>
+			dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "cancelled");
+			op.active = 0;
+			return;
+		* => ;
+	}
+
+	# Open file
+	fd := sys->open(path, Sys->OREAD);
+	if(fd == nil) {
+		dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, sys->sprint("can't open: %r"));
+		op.active = 0;
+		return;
+	}
+
+	# Get file size
+	(ok, dir) := sys->fstat(fd);
+	if(ok != 0) {
+		fd = nil;
+		dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "can't stat file");
+		op.active = 0;
+		return;
+	}
+	fsize := int dir.length;
+	if(fsize <= 0) {
+		fd = nil;
+		dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "empty file");
+		op.active = 0;
+		return;
+	}
+	# No arbitrary file size limit - imgload.b handles large images
+	# by automatically subsampling to fit in available memory
+
+	# Allocate buffer and read entire file
+	data := array[fsize] of byte;
+	total := 0;
+	while(total < fsize) {
+		# Check for cancellation periodically
+		alt {
+			<-op.ctl =>
+				fd = nil;
+				dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "cancelled");
+				op.active = 0;
+				return;
+			* => ;
+		}
+
+		n := sys->read(fd, data[total:], fsize - total);
+		if(n <= 0)
+			break;
+		total += n;
+	}
+	fd = nil;
+
+	if(total < fsize) {
+		dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "short read");
+		op.active = 0;
+		return;
+	}
+
+	# Send raw bytes to main thread - decoding happens there
+	dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, data, nil);
+	op.active = 0;
+}
+
+asynccancel(op: ref AsyncOp)
+{
+	if(op != nil && op.active) {
+		op.active = 0;
+		# Non-blocking send to cancel
+		alt {
+			op.ctl <-= 1 => ;
+			* => ;
+		}
+	}
+}
+
+asyncactive(op: ref AsyncOp): int
+{
+	if(op == nil)
+		return 0;
+	return op.active;
+}
+
+readtask(op: ref AsyncOp, path: string, q0: int)
+{
+	fd := sys->open(path, Sys->OREAD);
+	if(fd == nil) {
+		dat->casync <-= ref AsyncMsg.Error(op.opid, sys->sprint("can't open %s: %r", path));
+		op.active = 0;
+		return;
+	}
+
+	# Get file size for progress reporting
+	(ok, dir) := sys->fstat(fd);
+	total := 0;
+	if(ok == 0)
+		total = int dir.length;
+
+	buf := array[CHUNKSIZE + Sys->UTFmax] of byte;
+	nbytes := 0;
+	nrunes := 0;
+	offset := q0;
+	leftover := 0;  # Bytes left over from partial UTF-8 sequence
+
+	for(;;) {
+		# Check for cancellation
+		alt {
+			<-op.ctl =>
+				fd = nil;
+				dat->casync <-= ref AsyncMsg.Error(op.opid, "cancelled");
+				op.active = 0;
+				return;
+			* => ;
+		}
+
+		n := sys->read(fd, buf[leftover:], CHUNKSIZE);
+		if(n < 0) {
+			dat->casync <-= ref AsyncMsg.Error(op.opid, sys->sprint("read error: %r"));
+			op.active = 0;
+			return;
+		}
+		if(n == 0)
+			break;
+
+		m := leftover + n;
+		# Find valid UTF-8 boundary
+		nb := sys->utfbytes(buf, m);
+		if(nb == 0 && m > 0) {
+			# No complete characters yet, need more data
+			leftover = m;
+			continue;
+		}
+
+		s := string buf[0:nb];
+		nr := len s;
+
+		# Move leftover bytes to start
+		if(nb < m) {
+			buf[0:] = buf[nb:m];
+			leftover = m - nb;
+		} else {
+			leftover = 0;
+		}
+
+		nbytes += nb;
+		nrunes += nr;
+
+		# Send chunk
+		dat->casync <-= ref AsyncMsg.Chunk(op.opid, s, offset);
+		offset += nr;
+
+		# Send progress every 64KB
+		if((nbytes % (64*1024)) < CHUNKSIZE)
+			dat->casync <-= ref AsyncMsg.Progress(op.opid, nbytes, total);
+	}
+
+	fd = nil;
+	dat->casync <-= ref AsyncMsg.Complete(op.opid, nbytes, nrunes, nil);
+	op.active = 0;
+}
