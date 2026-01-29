@@ -51,6 +51,100 @@ asyncloadimage(path: string, winid: int): ref AsyncOp
 	return op;
 }
 
+asyncloadtext(path: string, q0: int, winid: int): ref AsyncOp
+{
+	op := ref AsyncOp;
+	op.opid = nextopid++;
+	op.ctl = chan[1] of int;
+	op.path = path;
+	op.active = 1;
+	op.winid = winid;
+
+	spawn texttask(op, path, q0, winid);
+	return op;
+}
+
+texttask(op: ref AsyncOp, path: string, q0: int, winid: int)
+{
+	# Check for cancellation before starting
+	alt {
+		<-op.ctl =>
+			dat->casync <-= ref AsyncMsg.TextComplete(op.opid, winid, path, 0, 0, "cancelled");
+			op.active = 0;
+			return;
+		* => ;
+	}
+
+	fd := sys->open(path, Sys->OREAD);
+	if(fd == nil) {
+		dat->casync <-= ref AsyncMsg.TextComplete(op.opid, winid, path, 0, 0, sys->sprint("can't open: %r"));
+		op.active = 0;
+		return;
+	}
+
+	# Get file size for progress
+	(ok, dir) := sys->fstat(fd);
+	fsize := 0;
+	if(ok == 0)
+		fsize = int dir.length;
+
+	pbuf := array[Dat->Maxblock+Sys->UTFmax] of byte;
+	m := 0;
+	nbytes := 0;
+	nrunes := 0;
+
+	for(;;) {
+		# Check for cancellation
+		alt {
+			<-op.ctl =>
+				fd = nil;
+				dat->casync <-= ref AsyncMsg.TextComplete(op.opid, winid, path, nbytes, nrunes, "cancelled");
+				op.active = 0;
+				return;
+			* => ;
+		}
+
+		n := sys->read(fd, pbuf[m:], Dat->Maxblock);
+		if(n < 0) {
+			fd = nil;
+			dat->casync <-= ref AsyncMsg.TextComplete(op.opid, winid, path, nbytes, nrunes, sys->sprint("read error: %r"));
+			op.active = 0;
+			return;
+		}
+		if(n == 0)
+			break;
+
+		m += n;
+		# Find valid UTF-8 boundary
+		nb := sys->utfbytes(pbuf, m);
+		if(nb == 0 && m > 0) {
+			# No complete characters yet, need more data
+			continue;
+		}
+
+		data := string pbuf[0:nb];
+		nr := len data;
+
+		# Move leftover bytes to start
+		if(nb < m) {
+			pbuf[0:] = pbuf[nb:m];
+			m = m - nb;
+		} else {
+			m = 0;
+		}
+
+		nbytes += nb;
+
+		# Send chunk
+		dat->casync <-= ref AsyncMsg.TextData(op.opid, winid, path, q0, data, nrunes, nil);
+		nrunes += nr;
+	}
+
+	fd = nil;
+	dat->casync <-= ref AsyncMsg.TextComplete(op.opid, winid, path, nbytes, nrunes, nil);
+	op.active = 0;
+}
+
 imagetask(op: ref AsyncOp, path: string, winid: int)
 {
 	# Check for cancellation before starting

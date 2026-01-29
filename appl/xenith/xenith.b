@@ -42,7 +42,7 @@ TRUE, FALSE, maxtab : import dat;
 Ref, Reffont, Command, Timer, Lock, Cursor : import dat;
 row, reffont, activecol, mouse, typetext, mousetext, barttext, argtext, seltext, button, modbutton, colbutton, arrowcursor, boxcursor, plumbed : import dat;
 Xfid : import xfidm;
-cmouse, ckeyboard, cwait, ccommand, ckill, cxfidalloc, cxfidfree, cerr, cplumb, cedit, casync : import dat;
+cmouse, ckeyboard, cwait, ccommand, ckill, cxfidalloc, cxfidfree, cerr, cplumb, cedit, casync, scrollstate : import dat;
 AsyncMsg : import asyncio;
 font, bflush, balloc, draw : import graph;
 Arg, PNPROC, PNGROUP : import utils;
@@ -614,19 +614,28 @@ mousetask()
 				else if(mouse.buttons == 4)
 					but = 3;
 				barttext = t;
+				# Check for active scroll state and handle updates/end
+				if(scrollstate != nil && scrollstate.active) {
+					# Check if button released
+					if(!(mouse.buttons & (1<<(scrollstate.but-1)))) {
+						scrl->scrollend();
+					} else {
+						# Update scroll position
+						scrl->scrollupdate();
+					}
+					bflush();
+					row.qlock.unlock();
+					break;
+				}
 				if(t.what==Body && mouse.xy.in(t.scrollr)){
 					if(but){
-						# Click-drag on scrollbar - release row lock during tracking
+						# Start non-blocking scroll
 						w.lock('M');
 						t.eq0 = ~0;
-						row.qlock.unlock();  # Release row lock during scroll tracking
-						scrl->scroll(t, but);
-						row.qlock.lock();  # Reacquire row lock
-						# Validate window still exists (col != nil is validity marker)
-						if(t.w != nil && t.w.col != nil)
-							t.w.unlock();
-						else if(t.w != nil)
-							t.w.unlock();  # Still unlock if window exists
+						scrl->scrollstart(t, but);
+						# Do first update immediately
+						scrl->scrollupdate();
+						w.unlock();
 					} else if(mouse.buttons & (8|16)){
 						# Scroll wheel on scrollbar - Acme-style variable speed
 						# Near top = slow (1 line), near bottom = fast (10 lines)
@@ -774,6 +783,51 @@ mousetask()
 							}
 						}
 						row.qlock.unlock();
+					TextData =>
+						# Insert text chunk into file buffer
+						row.qlock.lock();
+						if(msg.err != nil) {
+							warning(nil, sprint("text load: %s\n", msg.err));
+						} else {
+							w := look->lookid(msg.winid, 0);
+							if(w != nil && w.col != nil && w.body.file != nil) {
+								# Insert chunk into buffer
+								w.body.file.buf.insert(msg.q0 + msg.offset, msg.data, len msg.data);
+								# Update frame if visible
+								t := w.body;
+								if(msg.q0 + msg.offset < t.org + t.frame.nchars) {
+									rp := utils->stralloc(len msg.data);
+									rp.s = msg.data;
+									fpos := msg.q0 + msg.offset;
+									if(fpos >= t.org)
+										framem->frinsert(t.frame, rp.s, len msg.data, fpos - t.org);
+									else if(fpos + len msg.data > t.org) {
+										# Partial overlap - insert visible portion
+										skip := t.org - fpos;
+										framem->frinsert(t.frame, rp.s[skip:], len msg.data - skip, 0);
+									}
+									utils->strfree(rp);
+								}
+								scrl->scrdraw(t);
+							}
+						}
+						row.qlock.unlock();
+					TextComplete =>
+						# Mark file as fully loaded
+						row.qlock.lock();
+						if(msg.err != nil) {
+							warning(nil, sprint("text load: %s\n", msg.err));
+						} else {
+							w := look->lookid(msg.winid, 0);
+							if(w != nil && w.col != nil) {
+								w.body.file.unread = 0;
+								w.dirty = FALSE;
+								w.asyncload = nil;
+								w.settag();
+								scrl->scrdraw(w.body);
+							}
+						}
+						row.qlock.unlock();
 				}
 				bflush();
 			}
@@ -801,7 +855,7 @@ decodetask(winid: int, path: string, data: array of byte)
 			err = "image too large for heap (try: emu -pheap=128000000)";
 			im = nil;
 		* =>
-			err = "decode failed: " + e;
+			err = "decode failed: " + utils->getexc();
 			im = nil;
 	}
 

@@ -135,6 +135,16 @@ Dat : module {
 		next : cyclic ref Timer;
 	};
 
+	# Scroll state for non-blocking scroll (Phase 5b)
+	Scrollstate : adt {
+		active : int;           # Is scrolling active?
+		but : int;              # Button being used (1, 2, or 3)
+		t : ref Textm->Text;    # Text being scrolled
+		oldp0 : int;            # Last position to avoid redundant updates
+		first : int;            # First scroll event (for debounce)
+		timer : ref Timer;      # Current throttle timer
+	};
+
 	Command : adt {
 		pid : int;
 		name : string;
@@ -289,4 +299,7 @@ Dat : module {
 
 	# Async I/O results channel - set by asyncio module
 	casync: chan of ref Asyncio->AsyncMsg;
+
+	# Global scroll state for non-blocking scroll
+	scrollstate: ref Scrollstate;
 };

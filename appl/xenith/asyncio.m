@@ -33,6 +33,21 @@ Asyncio: module {
 				path: string;   # Image path (for display in tag)
 				image: ref Draw->Image;  # Decoded image (nil on error)
 				err: string;    # nil on success
+		TextData =>
+				opid: int;      # Operation ID
+				winid: int;     # Window ID for the text
+				path: string;   # File path
+				q0: int;        # Insert position (start of file content)
+				data: string;   # Chunk of text data
+				offset: int;    # Rune offset within file (cumulative)
+				err: string;    # nil on success
+		TextComplete =>
+				opid: int;      # Operation ID
+				winid: int;     # Window ID for the text
+				path: string;   # File path
+				nbytes: int;    # Total bytes read
+				nrunes: int;    # Total runes read
+				err: string;    # nil on success
 		}
 	};
 
@@ -50,6 +65,9 @@ Asyncio: module {
 
 	# Start async image load - returns operation handle
 	asyncloadimage: fn(path: string, winid: int): ref AsyncOp;
+
+	# Start async text file load - returns operation handle
+	asyncloadtext: fn(path: string, q0: int, winid: int): ref AsyncOp;
 
 	# Cancel an async operation
 	asynccancel: fn(op: ref AsyncOp);

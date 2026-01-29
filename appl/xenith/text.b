@@ -20,6 +20,7 @@ windowm : Windowm;
 exec : Exec;
 lookx : Look;
 complete: Complete;
+asyncio: Asyncio;
 
 Dir, sprint : import sys;
 dirname : import lookx;
@@ -126,7 +127,8 @@ init(mods : ref Dat->Mods)
 	windowm = mods.windowm;
 	exec = mods.exec;
 	lookx = mods.look;
-	
+	asyncio = mods.asyncio;
+
 	complete = load Complete Complete->PATH;
 	complete->init();
 }
@@ -393,9 +395,21 @@ Text.loadx(t : self ref Text, q0 : int, file : string, setqid : int) : int
 			q1 = t.file.buf.nc;
 		}else{
 			tmp : int;
-	
+
 			t.w.isdir = FALSE;
 			t.w.filemenu = TRUE;
+			# Use async loading for files > 10KB
+			if(int d.length > 10*1024) {
+				fd = nil;  # Close fd, async will reopen
+				if(setqid){
+					t.file.dev = d.dev;
+					t.file.mtime = d.mtime;
+					t.file.qidpath = d.qid.path;
+				}
+				t.file.unread = 1;  # Mark as still loading
+				t.w.asyncload = asyncio->asyncloadtext(file, q0, t.w.id);
+				return 0;  # Async loading started
+			}
 			tmp = t.file.loadx(q0, fd);
 			q1 = q0 + tmp;
 		}
