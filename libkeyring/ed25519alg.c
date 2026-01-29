@@ -1373,6 +1373,31 @@ ge_scalarmult_base(ge_p3 *h, const uchar *a)
 				fprint(2, "\nSELFTEST RFC8032 VERIFY: calling ed25519_verify (empty message)\n");
 				verify_result = ed25519_verify(rfc_sig, nil, 0, rfc_pk);
 				fprint(2, "SELFTEST RFC8032 VERIFY: result=%d (expected 1)\n", verify_result);
+
+				/* CRITICAL TEST: Sign with RFC 8032 key and verify signature matches */
+				{
+					uchar test_sk[64];
+					uchar test_sig[64];
+					int sig_match;
+
+					/* Create keypair from rfc_seed */
+					ed25519_create_keypair(test_pk, test_sk, rfc_seed);
+
+					/* Sign empty message */
+					ed25519_sign(test_sig, nil, 0, test_sk);
+
+					/* Compare with expected signature */
+					sig_match = (memcmp(test_sig, rfc_sig, 64) == 0);
+					fprint(2, "SELFTEST RFC8032 SIGN: produced_sig[0:8] = ");
+					for(i = 0; i < 8; i++) fprint(2, "%02x", test_sig[i]);
+					fprint(2, "\nSELFTEST RFC8032 SIGN: expected_sig[0:8] = ");
+					for(i = 0; i < 8; i++) fprint(2, "%02x", rfc_sig[i]);
+					fprint(2, "\nSELFTEST RFC8032 SIGN: produced_sig[32:40] = ");
+					for(i = 32; i < 40; i++) fprint(2, "%02x", test_sig[i]);
+					fprint(2, "\nSELFTEST RFC8032 SIGN: expected_sig[32:40] = ");
+					for(i = 32; i < 40; i++) fprint(2, "%02x", rfc_sig[i]);
+					fprint(2, "\nSELFTEST RFC8032 SIGN: sig_match=%d (MUST BE 1)\n", sig_match);
+				}
 			}
 		}
 	}
