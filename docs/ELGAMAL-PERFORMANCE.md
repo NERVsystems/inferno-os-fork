@@ -142,6 +142,42 @@ This could provide 10-50x speedup but requires significant effort.
 
 3. **Long term**: Consider optimizing libmp or using a faster library
 
+## Profiling Results
+
+Instrumented `gensafeprime.c` to measure where time is actually spent:
+
+**512-bit safe prime generation:**
+```
+GENSAFEPRIME PROFILE (512 bits):
+  Iterations: 553
+  genprime() total: 117885 ms (99.7%)
+  probably_prime(p) total: 340 ms (0.3%)
+  generator search: 1 ms (~0%)
+  TOTAL: 118227 ms
+```
+
+### Key Finding
+
+**The bottleneck is `genprime()`, NOT `probably_prime(p)`.**
+
+| Phase | Time | Percentage |
+|-------|------|------------|
+| `genprime(q)` | 117,885 ms | **99.7%** |
+| `probably_prime(p)` | 340 ms | 0.3% |
+| generator search | 1 ms | ~0% |
+
+- 553 iterations needed (tried 553 primes q before finding safe prime)
+- Each `genprime()` call averages ~213 ms
+- The `probably_prime(p)` check on p=2q+1 is negligible
+
+### Implications
+
+1. **Combined sieve won't help much** - The issue isn't redundant primality tests on p, it's the expensive Miller-Rabin iterations inside `genprime()` itself.
+
+2. **Pre-computed parameters are the solution** - There's no algorithmic shortcut; Miller-Rabin is inherently expensive in pure C with no assembly-optimized bignum operations.
+
+3. **libmp optimization would help** - Since 99.7% of time is in `genprime()` → `probably_prime()` → Miller-Rabin → modular exponentiation, optimizing `mpexp()` and `mpmod()` would directly improve performance.
+
 ## Test Data
 
 Generated on MacOSX/arm64 (Apple Silicon):
