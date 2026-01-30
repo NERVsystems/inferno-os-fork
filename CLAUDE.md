@@ -2,6 +2,16 @@
 
 This guide ensures Claude Code works correctly with the Infernode (Inferno OS) codebase.
 
+## JIT Compiler Availability
+
+**Only AMD64 (x86-64) has a JIT compiler.** The ARM64 JIT has not been ported.
+
+When compiling Limbo code:
+- **Use the native `limbo` compiler** (`MacOSX/arm64/bin/limbo`) - produces portable Dis bytecode
+- **Do NOT use the hosted limbo** (`dis/limbo.dis` inside emu) - it sets `MUSTCOMPILE` flag requiring JIT
+
+If you see "compiler required" errors when running `.dis` files, you compiled with the wrong limbo. Recompile using the native compiler.
+
 ## Building Limbo Code
 
 **Always use Inferno's native build tools from macOS**, not Plan 9 Port or commands inside Inferno. This ensures the build environment is compatible with the target Inferno system - the same compiler and mk that ship with Inferno are used to build code that runs on Inferno.

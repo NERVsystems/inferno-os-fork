@@ -1,8 +1,15 @@
 # ElGamal Performance Analysis
 
-## Problem Summary
+## Status: FIXED
 
-ElGamal key generation is extremely slow in Inferno/infernode:
+ElGamal 2048-bit key generation now uses pre-computed RFC 3526 parameters:
+- **Before**: 486,000 ms (8.1 minutes)
+- **After**: 2,258 ms (2.3 seconds)
+- **Speedup**: 215x
+
+## Original Problem
+
+ElGamal key generation was extremely slow in Inferno/infernode:
 
 | Key Size | Time |
 |----------|------|
