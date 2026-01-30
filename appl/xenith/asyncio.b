@@ -25,7 +25,9 @@ init(mods: ref Dat->Mods)
 
 	nextopid = 1;
 	# Initialize the global casync channel in dat module
-	dat->casync = chan[8] of ref AsyncMsg;
+	# Buffer size of 64 allows async tasks to make progress even when
+	# the main loop is in a nested event loop (e.g., dragwin)
+	dat->casync = chan[64] of ref AsyncMsg;
 }
 
 asyncload(path: string, q0: int): ref AsyncOp
@@ -144,14 +146,21 @@ texttask(op: ref AsyncOp, path: string, q0: int, winid: int)
 
 		nbytes += nb;
 
-		# Send chunk - check for cancellation while waiting
-		alt {
-			dat->casync <-= ref AsyncMsg.TextData(op.opid, winid, path, q0, data, nrunes, nil) =>
-				nrunes += nr;
-			<-op.ctl =>
-				fd = nil;
-				op.active = 0;
-				return;
+		# Send chunk - retry with cancellation check if channel full
+		for(;;) {
+			alt {
+				dat->casync <-= ref AsyncMsg.TextData(op.opid, winid, path, q0, data, nrunes, nil) =>
+					nrunes += nr;
+				<-op.ctl =>
+					fd = nil;
+					op.active = 0;
+					return;
+				* =>
+					# Channel full - yield and retry
+					sys->sleep(1);
+					continue;
+			}
+			break;
 		}
 	}
 
@@ -169,7 +178,8 @@ imagetask(op: ref AsyncOp, path: string, winid: int)
 	# Check for cancellation before starting
 	alt {
 		<-op.ctl =>
-			dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "cancelled");
+			# Non-blocking error send - drop if channel full
+			alt { dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "cancelled") => ; * => ; }
 			op.active = 0;
 			return;
 		* => ;
@@ -178,7 +188,8 @@ imagetask(op: ref AsyncOp, path: string, winid: int)
 	# Open file
 	fd := sys->open(path, Sys->OREAD);
 	if(fd == nil) {
-		dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, sys->sprint("can't open: %r"));
+		# Non-blocking error send
+		alt { dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, sys->sprint("can't open: %r")) => ; * => ; }
 		op.active = 0;
 		return;
 	}
@@ -187,14 +198,14 @@ imagetask(op: ref AsyncOp, path: string, winid: int)
 	(ok, dir) := sys->fstat(fd);
 	if(ok != 0) {
 		fd = nil;
-		dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "can't stat file");
+		alt { dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "can't stat file") => ; * => ; }
 		op.active = 0;
 		return;
 	}
 	fsize := int dir.length;
 	if(fsize <= 0) {
 		fd = nil;
-		dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "empty file");
+		alt { dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "empty file") => ; * => ; }
 		op.active = 0;
 		return;
 	}
@@ -209,7 +220,7 @@ imagetask(op: ref AsyncOp, path: string, winid: int)
 		alt {
 			<-op.ctl =>
 				fd = nil;
-				dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "cancelled");
+				alt { dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "cancelled") => ; * => ; }
 				op.active = 0;
 				return;
 			* => ;
@@ -223,13 +234,25 @@ imagetask(op: ref AsyncOp, path: string, winid: int)
 	fd = nil;
 
 	if(total < fsize) {
-		dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "short read");
+		alt { dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, nil, "short read") => ; * => ; }
 		op.active = 0;
 		return;
 	}
 
-	# Send raw bytes to main thread - decoding happens there
-	dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, data, nil);
+	# Send raw bytes to main thread - retry with cancellation check if channel full
+	for(;;) {
+		alt {
+			dat->casync <-= ref AsyncMsg.ImageData(op.opid, winid, path, data, nil) => ;
+			<-op.ctl =>
+				op.active = 0;
+				return;
+			* =>
+				# Channel full - yield and retry
+				sys->sleep(1);
+				continue;
+		}
+		break;
+	}
 	op.active = 0;
 }
 
@@ -387,14 +410,21 @@ dirtask(op: ref AsyncOp, path: string, winid: int)
 				isdir = 1;
 			}
 
-			# Send entry - check for cancellation while waiting
-			alt {
-				dat->casync <-= ref AsyncMsg.DirEntry(op.opid, winid, name, isdir) =>
-					nentries++;
-				<-op.ctl =>
-					fd = nil;
-					op.active = 0;
-					return;
+			# Send entry - retry with cancellation check if channel full
+			for(;;) {
+				alt {
+					dat->casync <-= ref AsyncMsg.DirEntry(op.opid, winid, name, isdir) =>
+						nentries++;
+					<-op.ctl =>
+						fd = nil;
+						op.active = 0;
+						return;
+					* =>
+						# Channel full - yield and retry
+						sys->sleep(1);
+						continue;
+				}
+				break;
 			}
 		}
 	}
