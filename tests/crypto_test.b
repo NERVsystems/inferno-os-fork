@@ -507,6 +507,54 @@ testMultipleAlgorithms(t: ref T)
 	}
 }
 
+#
+# Ed25519 stress test - run many iterations to catch edge cases
+# The sc_muladd bug only triggered when S had a leading zero byte (~1/256)
+# With 100 iterations, probability of hitting edge case is ~32% per run
+#
+testEd25519Stress(t: ref T)
+{
+	t.log("Ed25519 stress test - 100 iterations...");
+
+	iterations := 100;
+	failures := 0;
+
+	for(i := 0; i < iterations; i++) {
+		# Generate fresh key pair each iteration
+		sk := kr->genSK("ed25519", sys->sprint("stress-%d", i), 256);
+		if(sk == nil) {
+			t.error(sys->sprint("iteration %d: key generation failed", i));
+			failures++;
+			continue;
+		}
+
+		pk := kr->sktopk(sk);
+
+		# Use different message each iteration to vary the hash
+		msg := array of byte sys->sprint("Stress test message iteration %d with extra data %d", i, i*17);
+		state := kr->sha256(msg, len msg, nil, nil);
+
+		cert := kr->sign(sk, 0, state, "sha256");
+		if(cert == nil) {
+			t.error(sys->sprint("iteration %d: signing failed", i));
+			failures++;
+			continue;
+		}
+
+		state = kr->sha256(msg, len msg, nil, nil);
+		result := kr->verify(pk, cert, state);
+
+		if(result != 1) {
+			t.error(sys->sprint("iteration %d: verification failed", i));
+			failures++;
+		}
+	}
+
+	t.asserteq(failures, 0, sys->sprint("Ed25519 stress test: %d/%d passed", iterations-failures, iterations));
+	if(failures == 0)
+		t.log(sys->sprint("All %d iterations passed", iterations));
+}
+
 init(nil: ref Draw->Context, args: list of string)
 {
 	sys = load Sys Sys->PATH;
@@ -544,6 +592,7 @@ init(nil: ref Draw->Context, args: list of string)
 	run("AES/Available", testAESAvailable);
 	run("DH/2048bit", testDHParams);
 	run("MultiAlgorithm/Interop", testMultipleAlgorithms);
+	run("Ed25519/Stress", testEd25519Stress);
 
 	# Print summary
 	if(testing->summary(passed, failed, skipped) > 0)
