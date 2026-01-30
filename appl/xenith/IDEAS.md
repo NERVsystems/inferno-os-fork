@@ -355,6 +355,66 @@ Everything is a file.
 
 ---
 
+## TODO: Progressive Image Loading Test
+
+**Priority: Medium** - Verify progressive loading works as intended.
+
+### Background
+
+Progressive PNG loading was implemented to show images incrementally during decode,
+providing visual feedback for large images or high-latency connections. The infrastructure
+sends `ImageProgress` messages during decode, which trigger display updates.
+
+### The Problem
+
+On local systems with fast storage, both file reads and decodes complete so quickly
+that progressive updates are imperceptible - images appear to "pop" in fully formed.
+
+### Test Procedure
+
+To verify progressive loading actually works, add artificial delays:
+
+1. **In `imgload.b`, in `loadpngsubsampleprogressive()`**, add a 500ms delay after
+   sending progress updates:
+   ```limbo
+   if(progress != nil && png.dstrow - lastprogressrow >= progressinterval){
+       lastprogressrow = png.dstrow;
+       sys->sleep(500);  # TEMPORARY - remove after testing
+       alt {
+           progress <-= ref ImgProgress(im, png.dstrow, png.dstheight) => ;
+           * => ;
+       }
+   }
+   ```
+
+2. **Use a large image** that triggers subsampling (>16 megapixels):
+   ```bash
+   convert -size 5000x5000 gradient:red-blue /tmp/huge_gradient.png
+   ```
+
+3. **Expected behavior**: Image fills in from top to bottom, with visible updates
+   every ~10% of rows decoded.
+
+4. **After verification**: Remove the `sys->sleep(500)` line.
+
+### What to Verify
+
+- [ ] Progress messages are sent at correct intervals (~10 updates per image)
+- [ ] Main loop receives `ImageProgress` messages
+- [ ] Window display updates incrementally (top-to-bottom fill)
+- [ ] Final `ImageDecoded` message displays complete image
+- [ ] No deadlock or UI freeze during progressive display
+
+### Architecture Reference
+
+```
+decodetask() → progress channel → progressforwarder() → casync → ImageProgress handler
+                                                                        ↓
+                                                                 w.drawimage()
+```
+
+---
+
 ## TODO: ARM64 JIT Compiler
 
 **Priority: High** - Would dramatically improve all Limbo performance.
