@@ -1,0 +1,449 @@
+implement Veltro;
+
+#
+# veltro - Veltro Agent Loop
+#
+# A minimal agent where namespace IS the capability system.
+# Unlike OODA which filters from a full namespace, Veltro operates
+# in a constructed namespace - if a tool doesn't exist, it simply
+# doesn't exist. No hidden things, no false information.
+#
+# Named after the greyhound (veltro) in Dante's Inferno.
+#
+# Design principles:
+#   - Namespace = capability (constructed, not filtered)
+#   - Agent operates freely within its world
+#   - Everything visible is usable
+#   - ~150 lines of core logic
+#
+# Usage:
+#   veltro "task description"
+#   veltro -v "task description"     # verbose mode
+#   veltro -n 100 "task description" # max 100 steps
+#
+# Requires:
+#   - /tool mounted (via tools9p)
+#   - /n/llm mounted (LLM interface)
+#
+
+include "sys.m";
+	sys: Sys;
+
+include "draw.m";
+
+include "bufio.m";
+	bufio: Bufio;
+	Iobuf: import bufio;
+
+include "arg.m";
+
+include "string.m";
+	str: String;
+
+Veltro: module {
+	init: fn(ctxt: ref Draw->Context, argv: list of string);
+};
+
+# Defaults and limits
+DEFAULT_MAX_STEPS: con 50;
+MAX_MAX_STEPS: con 100;
+SCRATCH_PATH: con "/tmp/veltro/scratch";
+STREAM_THRESHOLD: con 4096;
+
+# Configuration
+verbose := 0;
+maxsteps := DEFAULT_MAX_STEPS;
+
+stderr: ref Sys->FD;
+
+usage()
+{
+	sys->fprint(stderr, "Usage: veltro [-v] [-n maxsteps] <task>\n");
+	sys->fprint(stderr, "\nOptions:\n");
+	sys->fprint(stderr, "  -v          Verbose output\n");
+	sys->fprint(stderr, "  -n steps    Maximum steps (default: %d, max: %d)\n",
+		DEFAULT_MAX_STEPS, MAX_MAX_STEPS);
+	sys->fprint(stderr, "\nRequires /tool and /n/llm to be mounted.\n");
+	raise "fail:usage";
+}
+
+nomod(s: string)
+{
+	sys->fprint(stderr, "veltro: can't load %s: %r\n", s);
+	raise "fail:load";
+}
+
+init(nil: ref Draw->Context, args: list of string)
+{
+	sys = load Sys Sys->PATH;
+	stderr = sys->fildes(2);
+
+	bufio = load Bufio Bufio->PATH;
+	if(bufio == nil)
+		nomod(Bufio->PATH);
+
+	str = load String String->PATH;
+	if(str == nil)
+		nomod(String->PATH);
+
+	arg := load Arg Arg->PATH;
+	if(arg == nil)
+		nomod(Arg->PATH);
+	arg->init(args);
+
+	while((o := arg->opt()) != 0)
+		case o {
+		'v' =>	verbose = 1;
+		'n' =>
+			n := int arg->earg();
+			if(n < 1)
+				n = 1;
+			if(n > MAX_MAX_STEPS)
+				n = MAX_MAX_STEPS;
+			maxsteps = n;
+		* =>	usage();
+		}
+	args = arg->argv();
+	arg = nil;
+
+	if(args == nil)
+		usage();
+
+	# Join remaining args as task
+	task := "";
+	for(; args != nil; args = tl args) {
+		if(task != "")
+			task += " ";
+		task += hd args;
+	}
+
+	# Check required mounts
+	if(!pathexists("/tool"))
+		sys->fprint(stderr, "warning: /tool not mounted (run tools9p first)\n");
+	if(!pathexists("/n/llm"))
+		sys->fprint(stderr, "warning: /n/llm not mounted (LLM unavailable)\n");
+
+	# Run agent
+	runagent(task);
+}
+
+# Main agent loop
+runagent(task: string)
+{
+	if(verbose)
+		sys->print("Veltro Agent starting with task: %s\n", task);
+
+	# Discover namespace - this IS our capability set
+	ns := discovernamespace();
+	if(verbose)
+		sys->print("Namespace: %s\n", ns);
+
+	# Assemble initial prompt
+	prompt := assembleprompt(task, ns);
+
+	for(step := 0; step < maxsteps; step++) {
+		if(verbose)
+			sys->print("\n=== Step %d ===\n", step + 1);
+
+		# Query LLM
+		response := queryllm(prompt);
+		if(response == "") {
+			sys->fprint(stderr, "veltro: LLM returned empty response\n");
+			break;
+		}
+
+		if(verbose)
+			sys->print("LLM: %s\n", response);
+
+		# Parse action from response
+		(tool, toolargs) := parseaction(response);
+
+		# Check for completion
+		if(tool == "" || str->tolower(tool) == "done") {
+			if(verbose)
+				sys->print("Task completed.\n");
+			# Print final response (excluding the DONE marker)
+			final := stripaction(response);
+			if(final != "")
+				sys->print("%s\n", final);
+			break;
+		}
+
+		if(verbose)
+			sys->print("Tool: %s\nArgs: %s\n", tool, toolargs);
+
+		# Execute tool
+		result := calltool(tool, toolargs);
+
+		if(verbose)
+			sys->print("Result: %s\n", truncate(result, 500));
+
+		# Check for large result - write to scratch
+		if(len result > STREAM_THRESHOLD) {
+			scratchfile := writescratch(result, step);
+			result = sys->sprint("(output written to %s, %d bytes)", scratchfile, len result);
+		}
+
+		# Feed result back for next iteration
+		prompt = sys->sprint("Tool %s returned:\n%s\n\nContinue with the task.", tool, result);
+	}
+
+	if(verbose && maxsteps > 0)
+		sys->print("Agent completed (max steps: %d)\n", maxsteps);
+}
+
+# Discover namespace - read /tool/tools and list accessible paths
+discovernamespace(): string
+{
+	result := "TOOLS:\n";
+
+	# Read available tools
+	tools := readfile("/tool/tools");
+	if(tools != "")
+		result += tools;
+	else
+		result += "(none)";
+
+	# List accessible paths
+	result += "\n\nPATHS:\n";
+	paths := array[] of {"/", "/tool", "/n", "/tmp"};
+	for(i := 0; i < len paths; i++) {
+		if(pathexists(paths[i]))
+			result += paths[i] + "\n";
+	}
+
+	return result;
+}
+
+# Assemble system prompt with namespace and task
+assembleprompt(task, ns: string): string
+{
+	# Read base system prompt
+	base := readfile("/lib/veltro/system.txt");
+	if(base == "")
+		base = defaultsystemprompt();
+
+	# Get tool documentation
+	tooldocs := "";
+	(nil, toollist) := sys->tokenize(readfile("/tool/tools"), "\n");
+	for(; toollist != nil; toollist = tl toollist) {
+		toolname := hd toollist;
+		doc := calltool("help", toolname);
+		if(doc != "" && !hasprefix(doc, "error:"))
+			tooldocs += "\n### " + toolname + "\n" + doc + "\n";
+	}
+
+	prompt := base + "\n\n== Your Namespace ==\n" + ns +
+		"\n\n== Tool Documentation ==\n" + tooldocs +
+		"\n\n== Task ==\n" + task +
+		"\n\nRespond with a tool invocation or DONE if complete.";
+
+	return prompt;
+}
+
+# Default system prompt if file not found
+defaultsystemprompt(): string
+{
+	return "You are a Veltro agent running in Inferno OS.\n\n" +
+		"Your namespace IS your capability set. You can only use tools that exist\n" +
+		"in your /tool directory. If a tool isn't there, it doesn't exist for you.\n\n" +
+		"To invoke a tool, output a line like:\n" +
+		"  Tool <args>\n\n" +
+		"For example:\n" +
+		"  Read /appl/veltro/veltro.b\n" +
+		"  List /appl\n\n" +
+		"When done, output DONE on its own line.\n" +
+		"Only output ONE tool invocation per response.";
+}
+
+# Query LLM via /n/llm
+queryllm(prompt: string): string
+{
+	# Write prompt to /n/llm/ask
+	fd := sys->open("/n/llm/ask", Sys->OWRITE);
+	if(fd == nil) {
+		if(verbose)
+			sys->fprint(stderr, "veltro: cannot open /n/llm/ask: %r\n");
+		return "";
+	}
+
+	data := array of byte prompt;
+	n := sys->write(fd, data, len data);
+	fd = nil;
+	if(n != len data) {
+		if(verbose)
+			sys->fprint(stderr, "veltro: write to /n/llm/ask failed: %r\n");
+		return "";
+	}
+
+	# Read response
+	return readfile("/n/llm/ask");
+}
+
+# Parse tool invocation from LLM response
+parseaction(response: string): (string, string)
+{
+	# Split into lines
+	(nil, lines) := sys->tokenize(response, "\n");
+
+	# Get available tools for matching
+	(nil, toollist) := sys->tokenize(readfile("/tool/tools"), "\n");
+
+	# Look for tool invocation
+	for(; lines != nil; lines = tl lines) {
+		line := hd lines;
+
+		# Skip empty lines
+		line = str->drop(line, " \t");
+		if(line == "")
+			continue;
+
+		# Check for DONE
+		if(str->tolower(line) == "done" || hasprefix(str->tolower(line), "done"))
+			return ("DONE", "");
+
+		# Check if line starts with a known tool name
+		(first, rest) := splitfirst(line);
+		tool := str->tolower(first);
+
+		# Match against discovered tools
+		for(t := toollist; t != nil; t = tl t) {
+			if(tool == hd t)
+				return (first, str->drop(rest, " \t"));
+		}
+
+		# Also check for "tools" and "help" (always available)
+		if(tool == "tools" || tool == "help")
+			return (first, str->drop(rest, " \t"));
+	}
+
+	return ("", "");
+}
+
+# Strip action line from response
+stripaction(response: string): string
+{
+	result := "";
+	(nil, lines) := sys->tokenize(response, "\n");
+	for(; lines != nil; lines = tl lines) {
+		line := hd lines;
+		lower := str->tolower(str->drop(line, " \t"));
+		if(lower == "done" || hasprefix(lower, "done"))
+			continue;
+		if(result != "")
+			result += "\n";
+		result += line;
+	}
+	return result;
+}
+
+# Call tool via /tool filesystem
+calltool(tool, args: string): string
+{
+	path := "/tool/" + str->tolower(tool);
+
+	# Open tool file
+	fd := sys->open(path, Sys->ORDWR);
+	if(fd == nil)
+		return sys->sprint("error: tool not found: %s", tool);
+
+	# Write arguments
+	if(args != "") {
+		data := array of byte args;
+		n := sys->write(fd, data, len data);
+		if(n < 0)
+			return sys->sprint("error: write to %s failed: %r", tool);
+	}
+
+	# Seek back to start
+	sys->seek(fd, big 0, Sys->SEEKSTART);
+
+	# Read result
+	result := "";
+	buf := array[8192] of byte;
+	for(;;) {
+		n := sys->read(fd, buf, len buf);
+		if(n <= 0)
+			break;
+		result += string buf[0:n];
+	}
+
+	return result;
+}
+
+# Write large result to scratch file
+writescratch(content: string, step: int): string
+{
+	ensuredir(SCRATCH_PATH);
+	path := sys->sprint("%s/step%d.txt", SCRATCH_PATH, step);
+
+	fd := sys->create(path, Sys->OWRITE, 8r644);
+	if(fd == nil)
+		return "(cannot create scratch file)";
+
+	data := array of byte content;
+	sys->write(fd, data, len data);
+	return path;
+}
+
+# Helper functions
+readfile(path: string): string
+{
+	fd := sys->open(path, Sys->OREAD);
+	if(fd == nil)
+		return "";
+
+	result := "";
+	buf := array[8192] of byte;
+	for(;;) {
+		n := sys->read(fd, buf, len buf);
+		if(n <= 0)
+			break;
+		result += string buf[0:n];
+	}
+	return result;
+}
+
+pathexists(path: string): int
+{
+	(ok, nil) := sys->stat(path);
+	return ok >= 0;
+}
+
+ensuredir(path: string)
+{
+	fd := sys->open(path, Sys->OREAD);
+	if(fd != nil)
+		return;
+
+	# Ensure parent
+	for(i := len path - 1; i > 0; i--) {
+		if(path[i] == '/') {
+			ensuredir(path[0:i]);
+			break;
+		}
+	}
+
+	sys->create(path, Sys->OREAD, Sys->DMDIR | 8r755);
+}
+
+hasprefix(s, prefix: string): int
+{
+	return len s >= len prefix && s[0:len prefix] == prefix;
+}
+
+splitfirst(s: string): (string, string)
+{
+	for(i := 0; i < len s; i++) {
+		if(s[i] == ' ' || s[i] == '\t')
+			return (s[0:i], s[i:]);
+	}
+	return (s, "");
+}
+
+truncate(s: string, max: int): string
+{
+	if(len s <= max)
+		return s;
+	return s[0:max] + "...";
+}
