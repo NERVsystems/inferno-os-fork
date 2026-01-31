@@ -124,7 +124,7 @@ testSearchTool(t: ref T)
 	doc := tool->doc();
 	t.assert(len doc > 0, "search tool has documentation");
 	t.assert(hassubstr(doc, "Search"), "doc mentions Search");
-	t.assert(hassubstr(doc, "regex"), "doc mentions regex");
+	t.assert(hassubstr(doc, "regular expression"), "doc mentions regular expression");
 }
 
 # Test that Write tool loads and has correct name/doc
