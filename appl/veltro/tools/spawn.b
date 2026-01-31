@@ -216,12 +216,29 @@ reverse(l: list of string): list of string
 	return result;
 }
 
-# Check if tool exists in our namespace
+# Check if tool exists in parent's namespace
+#
+# FIXME: Tool validation is currently disabled due to deadlock.
+#
+# The problem: spawn.b runs inside tools9p's single-threaded serveloop.
+# Any 9P operation on /tool (like stat("/tool/list")) sends a request back
+# to tools9p, but serveloop is blocked waiting for spawn.exec() to return.
+# Result: deadlock.
+#
+# Proper fix options:
+#   1. Make tools9p multi-threaded (spawn handler per request)
+#   2. Have tools9p export tool list via environment variable before exec
+#   3. Add /_registry synthetic file that returns tool list synchronously
+#      without going through the 9P request path
+#   4. Pass tool list as parameter to spawn tool somehow
+#
+# For now, we skip validation and trust that the LLM won't request
+# tools that don't exist (veltro discovers tools at startup).
+#
 toolexists(tool: string): int
 {
-	path := "/tool/" + tool;
-	(ok, nil) := sys->stat(path);
-	return ok >= 0;
+	# FIXME: Always returns true - validation disabled (see above)
+	return 1;
 }
 
 # Check if path exists in our namespace

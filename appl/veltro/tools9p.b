@@ -331,7 +331,20 @@ ensuredir(path: string)
 
 serveloop(tchan: chan of ref Tmsg, srv: ref Styxserver, pidc: chan of int, navops: chan of ref Navop)
 {
-	pidc <-= sys->pctl(Sys->FORKNS|Sys->NEWFD, 1::2::srv.fd.fd::nil);
+	# Note: We intentionally DON'T use FORKNS here.
+	#
+	# Normally 9P servers use FORKNS|NEWFD to isolate their namespace.
+	# However, tools executed by tools9p (like spawn.b) may need to access
+	# /tool, which is mounted by init() AFTER serveloop starts. Without
+	# FORKNS, we share the namespace with init() and see the mount.
+	#
+	# Tradeoff: Tools can now affect the parent namespace. This is acceptable
+	# for Veltro since tools run in the same trust domain as the agent.
+	#
+	# Alternative fix: Mount /tool before spawning serveloop, but that
+	# requires the 9P server to be running first (chicken-and-egg).
+	#
+	pidc <-= sys->pctl(Sys->NEWFD, 1::2::srv.fd.fd::nil);
 
 Serve:
 	while((gm := <-tchan) != nil) {

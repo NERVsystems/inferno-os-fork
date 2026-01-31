@@ -128,6 +128,9 @@ Linux/amd64/bin/*
 tmp/*.pdfi*
 tmp/plumb.log
 
+# Inferno mount points (should never contain real files)
+tool/
+
 # SPIN model checker generated files
 formal-verification/spin/pan
 formal-verification/spin/pan.*
